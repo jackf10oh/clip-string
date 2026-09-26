@@ -81,6 +81,65 @@ class ClipString
 
     constexpr ClipString(size_type count, CharT ch) noexcept
     {
+      assign(count, ch);
+    }
+
+    template< class InputIt >
+    constexpr ClipString( InputIt first, InputIt last) noexcept
+    {
+      assign<InputIt>(first,last);
+    }
+
+    constexpr ClipString(const CharT* s, size_type count) noexcept
+    {
+      assign(s,count);
+    }
+
+    constexpr ClipString( const CharT* s) noexcept
+    {
+      assign(s);
+    }
+
+    template<class StringViewLike>
+    constexpr ClipString( const StringViewLike& t) noexcept // C++17 only
+    {
+      assign<StringViewLike>(t);
+    }
+
+    template<class StringViewLike>
+    constexpr ClipString( const StringViewLike& t, size_type pos, size_type count) // C++17 only
+    {
+      assign<StringViewLike>(t,pos,count);
+    }
+
+    template<std::size_t kSizeOther>
+    constexpr ClipString(const CopyableClipString<kSizeOther>& s) noexcept
+    {
+      assign<kSizeOther>(s);
+    }
+
+    template<std::size_t kSizeOther>
+    constexpr ClipString(const CopyableClipString<kSizeOther>& s, size_type pos)
+    {
+      assign<kSizeOther>(s,pos);
+    }
+
+    template<std::size_t kSizeOther>
+    constexpr ClipString(const CopyableClipString<kSizeOther>& s, size_type pos, size_type count)
+    {
+      assign<kSizeOther>(s,pos,count);
+    }
+
+    constexpr ClipString( std::initializer_list<CharT> ilist ) noexcept
+    {
+      assign(ilist);
+    }
+
+    // ------------------------
+    // Assign 
+    // ------------------------
+    constexpr ClipString& assign(size_type count, CharT ch) noexcept
+    {
       if(count <= kSize)
       {
         traits_type::assign(data(), std::min(count,kSize), ch);
@@ -96,10 +155,11 @@ class ClipString
         set_flags(Flags::Clipped);
         set_slack(1);
       }
+      return *this;
     }
 
     template< class InputIt >
-    constexpr ClipString( InputIt first, InputIt last) noexcept
+    constexpr ClipString&  assign( InputIt first, InputIt last) noexcept
     {
       size_type count = std::distance(first, last); // TODO not actually single pass through range
       if(count <= kSize)
@@ -121,15 +181,16 @@ class ClipString
         set_flags(Flags::Clipped);
         set_slack(1);
       }
+      return *this;
     }
 
-    constexpr ClipString(const CharT* s, size_type count) noexcept
+    constexpr ClipString& assign(const CharT* s, size_type count) noexcept
     {
       if(!s)
       {
         clear();
         set_flags(Flags::NullptrPassed);
-        return;
+        return *this;
       }
       if(count <= kSize)
       {
@@ -146,15 +207,16 @@ class ClipString
         set_flags(Flags::Clipped);
         set_slack(1);
       }
+      return *this;
     }
 
-    constexpr ClipString( const CharT* s) noexcept
+    constexpr ClipString& assign( const CharT* s) noexcept
     {
       if(!s)
       {
         clear();
         set_flags(Flags::NullptrPassed);
-        return;
+        return *this;
       }
       size_type count = traits_type::length(s);
       if(count <= kSize)
@@ -172,10 +234,11 @@ class ClipString
         set_flags(Flags::Clipped);
         set_slack(1);
       }
+      return *this;
     }
 
     template<class StringViewLike>
-    constexpr explicit ClipString( const StringViewLike& t) noexcept // C++17 only
+    constexpr ClipString& assign( const StringViewLike& t) noexcept // C++17 only
     {
       std::basic_string_view<CharT, Traits> sv = t;
       size_type count = sv.length();
@@ -194,10 +257,11 @@ class ClipString
         set_flags(Flags::Clipped);
         set_slack(1);
       }      
+      return *this;
     }
 
     template<class StringViewLike>
-    constexpr explicit ClipString( const StringViewLike& t, size_type pos, size_type count) // C++17 only
+    constexpr ClipString& assign( const StringViewLike& t, size_type pos, size_type count) // C++17 only
     {
       if(pos > t.length()) throw std::out_of_range{};
       std::basic_string_view<CharT, Traits> sv = t;
@@ -217,10 +281,11 @@ class ClipString
         set_flags(Flags::Clipped);
         set_slack(1);
       }      
+      return *this;
     }
 
     template<std::size_t kSizeOther>
-    constexpr ClipString(const CopyableClipString<kSizeOther>& s) noexcept
+    constexpr ClipString& assign(const CopyableClipString<kSizeOther>& s) noexcept
     {
       size_type count = s.length();
       if(count <= kSize)
@@ -240,10 +305,11 @@ class ClipString
       }
       UnsignedCharT f = flags() | (s.flags() & Flags::FlagsMask);
       set_flags(f);
+      return *this;
     }
 
     template<std::size_t kSizeOther>
-    constexpr ClipString(const CopyableClipString<kSizeOther>& s, size_type pos)
+    constexpr ClipString& assign(const CopyableClipString<kSizeOther>& s, size_type pos)
     {
       if(pos > s.length()) throw std::out_of_range{};
       size_type count = s.length() - pos;
@@ -264,10 +330,11 @@ class ClipString
       }
       UnsignedCharT f = flags() | (s.flags() & Flags::FlagsMask);
       set_flags(f);
+      return *this;
     }
 
     template<std::size_t kSizeOther>
-    constexpr ClipString(const CopyableClipString<kSizeOther>& s, size_type pos, size_type count)
+    constexpr ClipString& assign(const CopyableClipString<kSizeOther>& s, size_type pos, size_type count)
     {
       if(pos > s.length()) throw std::out_of_range{};
       count = std::min(s.length() - pos, count);
@@ -288,9 +355,10 @@ class ClipString
       }
       UnsignedCharT f = flags() | (s.flags() & Flags::FlagsMask);
       set_flags(f);
+      return *this;
     }
 
-    constexpr ClipString( std::initializer_list<CharT> ilist ) noexcept
+    constexpr ClipString& assign( std::initializer_list<CharT> ilist ) noexcept
     {
       size_type count = ilist.size();
       auto first = ilist.begin();
@@ -313,6 +381,7 @@ class ClipString
         set_flags(Flags::Clipped);
         set_slack(1);
       }
+      return *this;
     }
 
     // destructor

@@ -210,5 +210,10 @@ TYPED_TEST(STLContainerSuite, Capacity){
   ASSERT_EQ(m, kSize);
 }
 
+TYPED_TEST(STLContainerSuite, PushBackPopBack){
+  constexpr std::size_t kSize = TypeParam::kSize;
+  using CharT = typename TypeParam::CharT;
+}
+
 
 

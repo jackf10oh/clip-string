@@ -43,6 +43,12 @@ class ClipString
     template<std::size_t kSizeOther>
     using CopyableClipString = ClipString<kSizeOther,CharT,Traits>; // easier than asserting std::is_same at every step
 
+    template<typename T>
+    struct is_sv_convertible : std::conjunction<std::is_convertible<const T&, const CharT*>, std::negation<std::is_convertible_v<const T&, const CharT*>>>{};
+    
+    template<typename T>
+    using is_sv_convertible_v = is_sv_convertible::value;
+
     using UnsignedCharT = typename std::make_unsigned<CharT>::type;
     static_assert(sizeof(UnsignedCharT) == sizeof(CharT));
     static_assert(alignof(UnsignedCharT) == alignof(CharT));
@@ -54,7 +60,7 @@ class ClipString
     using reference = CharT&; 
     using const_reference = const CharT&;
     using size_type = std::size_t; 
-    using different_type = std::ptrdiff_t;
+    using difference_type = std::ptrdiff_t;
     using pointer = CharT*;
     using const_pointer = const CharT*;
     using iterator = CharT*;
@@ -100,13 +106,13 @@ class ClipString
       assign(s);
     }
 
-    template<class StringViewLike, typename = std::enable_if_t<!std::is_same_v<StringViewLike,const CharT*> && !std::is_same_v<StringViewLike,CharT*>>>
+    template<class StringViewLike, typename = std::enable_if_t<is_sv_convertible_v<StringViewLike>>>
     constexpr ClipString(const StringViewLike& t) noexcept // C++17 only
     {
       assign<StringViewLike>(t);
     }
 
-    template<class StringViewLike>
+    template<class StringViewLike, typename = std::enable_if_t<is_sv_convertible_v<StringViewLike>>>
     constexpr ClipString( const StringViewLike& t, size_type pos, size_type count) // C++17 only
     {
       assign<StringViewLike>(t,pos,count);
@@ -164,25 +170,26 @@ class ClipString
     template< class InputIt >
     constexpr ClipString&  assign(InputIt first, InputIt last) noexcept
     {
-      size_type count = std::distance(first, last); // TODO not actually single pass through range
-      if(count <= kSize)
+      // copy up to kSize entries out of [first, last)
+      size_type count = 0;
+      while((first!=last) && (count!=kSize))
       {
-        auto ptr = data();
-        auto lam = [&ptr](const CharT& ch){traits_type::assign(*ptr, ch); ++ptr; };
-        std::for_each_n(first, count, lam);
-        traits_type::assign(*ptr, CharT{}); // null terminate
-        set_flags(static_cast<UnsignedCharT>(~Flags::FlagsMask)); // flags are all false
-        set_slack(kSize-count);
+        traits_type::assign(data()[count], *first);
+        ++count;
+        ++first;
+      }
+      // if we wrote exactly kSize entries and haven't reach the end of [first,last) -> clipped the range
+      if((count==kSize) && (first!=last))
+      {
+        set_flags(Flags::Clipped);
+        set_slack(1);
+        traits_type::assign(data()[kSize-1],CharT{});
       }
       else
       {
-        // need to set flags + clip
-        auto ptr = data();
-        auto lam = [&ptr](const CharT& ch){traits_type::assign(*ptr, ch); ++ptr; };
-        std::for_each_n(first, kSize-1, lam);
-        traits_type::assign(*ptr, CharT{}); // null terminate
-        set_flags(Flags::Clipped);
-        set_slack(1);
+        set_flags(0x00);
+        set_slack(kSize-count);
+        traits_type::assign(data[kSize-count],CharT{});
       }
       return *this;
     }
@@ -240,7 +247,7 @@ class ClipString
       return *this;
     }
 
-    template<class StringViewLike, typename = std::enable_if_t<!std::is_same_v<StringViewLike,const CharT*> && !std::is_same_v<StringViewLike,CharT*>>>
+    template<class StringViewLike, typename = std::enable_if_t<is_sv_convertible_v<StringViewLike>>>
     constexpr ClipString& assign( const StringViewLike& t) noexcept // C++17 only
     {
       std::basic_string_view<CharT, Traits> sv = t;
@@ -263,7 +270,7 @@ class ClipString
       return *this;
     }
 
-    template<class StringViewLike>
+    template<class StringViewLike, typename = std::enable_if_t<is_sv_convertible_v<StringViewLike>>>
     constexpr ClipString& assign( const StringViewLike& t, size_type pos, size_type count) // C++17 only
     {
       if(pos > t.length()) throw std::out_of_range{};
@@ -409,7 +416,7 @@ class ClipString
       return assign(ilist);
     }
 
-    template<class StringViewLike>
+    template<class StringViewLike, typename = std::enable_if_t<is_sv_convertible_v<StringViewLike>>>
     ClipString& operator=( const StringViewLike& t )
     {
       return assign(t);
@@ -490,10 +497,233 @@ class ClipString
     }
 
     // Insert -------------- 
+    constexpr ClipString& insert(size_type index, size_type count, CharT ch)
+    {
+      if(index > size()) throw std::out_of_range{c_str()};
 
-    // --------------
-    // erase
-    // --------------
+      // if inserting this many were to cause clipping 
+      std::size_t c = capacity();
+      std::size_t s = size(); 
+
+        
+      if((s + count) > c) // clipping will occur
+      {
+        if((index + count) > c)
+        {
+          // clip happens somewhere in [index, index + count)
+          traits_type::assign(data() + index, kSize - 1 - index, ch);
+          traits_type::assign(data()[kSize-1], CharT{});
+        }
+        else
+        {
+          // clip happens somewhere in [index + count, size + count)
+          std::size_t moved = kSize - 1 - (index + count);
+          traits_type::move(data() + index + count, data() + index, moved); // move with a clip 
+          traits_type::assign(data()[kSize-1], CharT{}); // null terminate
+          traits_type::assign(data() + index, count, ch);
+        }
+        set_flags(flags() | Flags::Clipped);
+        set_slack(1);   
+      }
+      else // safely copy everything
+      {
+        traits_type::move(data() + index + count, data() + index, s - index);
+        traits_type::assign(data() + index, count, ch);
+        traits_type::assign(data()[s + count], CharT{});
+        set_slack(kSize - (s + count));
+      }
+      return *this;
+    }
+
+    constexpr ClipString& insert(size_type index, const CharT* s)
+    {
+      if(index > size()) throw std::out_of_range{c_str()};
+
+      // guard against nullptr
+      if(s == nullptr)
+      {
+        set_flags(flags() | Flags::NullptrPassed);
+        // setting last bits to != null terminator -> may have to back up 1 character and clip something
+        if(slack()==0)
+        {
+          set_flags(flags() | Flags::Clipped);
+          set_slack(1);
+          traits_type::assign(data()[kSize-1], CharT{});
+        }
+        return *this;
+      }
+      // if inserting this many were to cause clipping 
+      std::size_t c = capacity();
+      std::size_t sz = size(); 
+      std::size_t count = traits_type::length(s);
+        
+      if((sz + count) > c) // clipping will occur
+      {
+        if((index + count) > c)
+        {
+          // clip happens somewhere in [index, index + count)
+          traits_type::copy(data() + index, s, kSize - 1 - index);
+          traits_type::assign(data()[kSize-1], CharT{});
+        }
+        else
+        {
+          // clip happens somewhere in [index + count, size + count)
+          std::size_t moved = kSize - 1 - (index + count);
+          traits_type::move(data() + index + count, data() + index, moved); // move with a clip 
+          traits_type::assign(data()[kSize-1], CharT{}); // null terminate
+          traits_type::copy(data() + index, s, count);
+        }
+        set_flags(flags() | Flags::Clipped);
+        set_slack(1);   
+      }
+      else // safely copy everything
+      {
+        traits_type::move(data() + index + count, data() + index, sz - index);
+        traits_type::copy(data() + index, s, count);
+        traits_type::assign(data()[sz + count], CharT{});
+        set_slack(kSize - (sz + count));
+      }
+      return *this;
+    }
+
+    constexpr ClipString& insert(size_type index, const CharT* s, size_type count)
+    {
+      if(index > size()) throw std::out_of_range{c_str()};
+
+      // guard against nullptr
+      if(s == nullptr)
+      {
+        set_flags(flags() | Flags::NullptrPassed);
+        // setting last bits to != null terminator -> may have to back up 1 character and clip something
+        if(slack()==0)
+        {
+          set_flags(flags() | Flags::Clipped);
+          set_slack(1);
+          traits_type::assign(data()[kSize-1], CharT{});
+        }
+        return *this;
+      }
+      // if inserting this many were to cause clipping 
+      std::size_t c = capacity();
+      std::size_t sz = size(); 
+        
+      if((sz + count) > c) // clipping will occur
+      {
+        if((index + count) > c)
+        {
+          // clip happens somewhere in [index, index + count)
+          traits_type::copy(data() + index, s, kSize - 1 - index);
+          traits_type::assign(data()[kSize-1], CharT{});
+        }
+        else
+        {
+          // clip happens somewhere in [index + count, size + count)
+          std::size_t moved = kSize - 1 - (index + count);
+          traits_type::move(data() + index + count, data() + index, moved); // move with a clip 
+          traits_type::assign(data()[kSize-1], CharT{}); // null terminate
+          traits_type::copy(data() + index, s, count);
+        }
+        set_flags(flags() | Flags::Clipped);
+        set_slack(1);   
+      }
+      else // safely copy everything
+      {
+        traits_type::move(data() + index + count, data() + index, sz - index);
+        traits_type::copy(data() + index, s, count);
+        traits_type::assign(data()[sz + count], CharT{});
+        set_slack(kSize - (sz + count));
+      }
+      return *this;
+    }
+
+    template<std::size_t kSizeOther>
+    constexpr ClipString& insert(size_type index, const CopyableClipString<kSizeOther>& other)
+    {
+      // first copy the flags from other string
+      UnsignedCharT f_other = other.flags() & Flags::FlagsMask;
+      if(f_other != 0)
+      {
+        std::size_t slk = this->slack();
+        if(slk != 0)
+        {
+          set_flags(flags() | f_other);
+        }
+        else
+        {
+          set_flags(flags() | f_other | Flags::Clipped);
+          set_slack(1);
+        }
+      }
+      return insert(index, other.c_str(), other.size());
+    }
+
+    template<std::size_t kSizeOther>
+    constexpr ClipString& insert(size_type index, const CopyableClipString<kSizeOther>& str, size_type s_index, size_type count = npos )
+    {
+      if(s_index > str.size()) throw std::out_of_range{str.c_str()};
+      // first copy the flags from other string
+      UnsignedCharT f_other = str.flags() & Flags::FlagsMask;
+      if(f_other != 0)
+      {
+        std::size_t slk = this->slack();
+        if(slk != 0)
+        {
+          set_flags(flags() | f_other);
+        }
+        else
+        {
+          set_flags(flags() | f_other | Flags::Clipped);
+          set_slack(1);
+        }
+      }
+      return insert(index, str.c_str() + s_index, std::min(count, str.size()-s_index));
+    }
+
+    constexpr iterator insert( const_iterator pos, CharT ch ) noexcept
+    {
+      difference_type index = std::distance(cbegin(), pos);
+      insert(index, 1, ch);
+      return std::next(begin(), index);
+    }
+
+    constexpr iterator insert( const_iterator pos, size_type count, CharT ch ) noexcept
+    {
+      difference_type index = std::distance(cbegin(), pos);
+      insert(index, count, ch);
+      return std::next(begin(), index);
+    }
+
+    template< class InputIt >
+    constexpr iterator insert( const_iterator pos, InputIt first, InputIt last ) noexcept
+    {
+      difference_type index = std::distance(cbegin(), pos);
+      insert(index, ClipString(first,last));
+      return std::next(begin(), index);
+    }
+
+    constexpr iterator insert( const_iterator pos, std::initializer_list<CharT> ilist ) noexcept
+    {
+      difference_type index = std::distance(cbegin(), pos);
+      insert(index, ClipString(ilist));
+      return std::next(begin(), index);
+    }
+
+    template<class StringViewLike, typename = std::enable_if_t<is_sv_convertible_v<StringViewLike>>>
+    constexpr ClipString& insert( size_type index, const StringViewLike& t )
+    {
+      std::basic_string_view<CharT, Traits> sv = t;
+      return insert(index, sv.c_str(), sv.lengt());
+    }
+
+    template<class StringViewLike, typename = std::enable_if_t<is_sv_convertible_v<StringViewLike>>>
+    constexpr basic_string& insert(size_type index, const StringViewLike& t, size_type t_index, size_type count = npos)
+    {
+      std::basic_string_view<CharT,Traits> sv(t);
+      if(t_index > sv.length()) throw std::out_of_range{sv.c_str()};
+      return insert(index, sv.c_str() + t_index, std::min(count, sv.length()-t_index));
+    }
+
+    // erase --------------
 
     // push_back --------------
     void push_back(CharT ch) noexcept
@@ -521,7 +751,7 @@ class ClipString
     {
       // UB if empty() == true
       std::size_t s = slack();
-      traits_type::assign(*reinterpret_cast<CharT*>(m_data.data() + kSize - s),CharT{});
+      traits_type::assign(data()[kSize - s],CharT{});
       set_slack(s - 1);
     }
 

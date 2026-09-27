@@ -758,7 +758,21 @@ class ClipString
     // --------------
     // append
     // --------------
-
+    constexpr ClipString& append(size_type count, CharT ch) noexcept { return insert(size(), count, ch); } 
+    constexpr ClipString& append(const CharT* s, size_type count) noexcept { return insert(size(), s, count); } 
+    constexpr ClipString& append(const CharT* s) noexcept { return insert(size(), s); } 
+    template< class SV, typename = std::enable_if_t<is_sv_convertible_v<SV>>>
+    constexpr ClipString& append( const SV& t ) noexcept { return insert<SV>(size(), t); }
+    template< class SV, typename = std::enable_if_t<is_sv_convertible_v<SV>>>
+    constexpr ClipString& append(const SV& t, size_type pos, size_type count = npos){ return insert(size(), t, pos, count); }
+    template<std::size_t kSizeOther>    
+    constexpr ClipString& append(const CopyableClipString<kSizeOther>& str) noexcept { return insert(size(), str); } 
+    template<std::size_t kSizeOther>    
+    constexpr ClipString& append(const CopyableClipString<kSizeOther>& str, size_type pos, size_type count = npos ){ return insert(size(), str, pos, count); }
+    template<class InputIt>
+    constexpr ClipString& append(InputIt first, InputIt last) noexcept { return insert<InputIt>(size(), first, last); }
+    constexpr ClipString& append( std::initializer_list<CharT> ilist ) noexcept { return insert(size(), ilist); }
+    
     // --------------
     // opertator+=
     // --------------
@@ -840,6 +854,7 @@ class ClipString
         }
       }
     }
+    
     void set_slack(size_type slack)
     {
       if constexpr(kSize <= ((std::size_t{1} << (CHAR_BIT*sizeof(CharT)-2))-1))

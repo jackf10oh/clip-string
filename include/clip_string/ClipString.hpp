@@ -776,6 +776,13 @@ class ClipString
     // --------------
     // opertator+=
     // --------------
+    template<std::size_t kSizeOther>
+    constexpr ClipString& operator+=(const CopyableClipString<kSizeOther>& str) noexcept { return append<kSizeOther>(std); }
+    constexpr ClipString& operator+=(CharT ch) noexcept { push_back(ch); return *this; }
+    constexpr ClipString& operator+=( const CharT* s ) noexcept { return append(s); }
+    constexpr ClipString& operator+=(std::initializer_list<CharT> ilist) noexcept { return append(ilist); }
+    template< class StringViewLike, typename = std::enable_if_t<is_sv_convertible_v<StringViewLike>>>
+    ClipString& operator+=( const StringViewLike& t ) noexcept { return append<StringViewLike>(t); }
 
     // --------------
     // replace
@@ -788,7 +795,7 @@ class ClipString
     // --------------
     // resize
     // --------------
-    constexpr void resize( size_type count, CharT ch ={} )
+    constexpr void resize( size_type count, CharT ch = CharT{} )
     {
       if(count > capacity())
       {

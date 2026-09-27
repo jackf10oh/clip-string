@@ -44,10 +44,7 @@ class ClipString
     using CopyableClipString = ClipString<kSizeOther,CharT,Traits>; // easier than asserting std::is_same at every step
 
     template<typename T>
-    struct is_sv_convertible : std::conjunction<std::is_convertible<const T&, const CharT*>, std::negation<std::is_convertible_v<const T&, const CharT*>>>{};
-    
-    template<typename T>
-    using is_sv_convertible_v = is_sv_convertible::value;
+    struct is_sv_convertible : std::conjunction<std::is_convertible<const T&, const CharT*>, std::negation<std::is_convertible<const T&, const CharT*>>>{};
 
     using UnsignedCharT = typename std::make_unsigned<CharT>::type;
     static_assert(sizeof(UnsignedCharT) == sizeof(CharT));
@@ -106,13 +103,13 @@ class ClipString
       assign(s);
     }
 
-    template<class StringViewLike, typename = std::enable_if_t<is_sv_convertible_v<StringViewLike>>>
+    template<class StringViewLike, typename = std::enable_if_t<is_sv_convertible<StringViewLike>::value>>
     constexpr ClipString(const StringViewLike& t) noexcept // C++17 only
     {
       assign<StringViewLike>(t);
     }
 
-    template<class StringViewLike, typename = std::enable_if_t<is_sv_convertible_v<StringViewLike>>>
+    template<class StringViewLike, typename = std::enable_if_t<is_sv_convertible<StringViewLike>::value>>
     constexpr ClipString( const StringViewLike& t, size_type pos, size_type count) // C++17 only
     {
       assign<StringViewLike>(t,pos,count);
@@ -189,7 +186,7 @@ class ClipString
       {
         set_flags(0x00);
         set_slack(kSize-count);
-        traits_type::assign(data[kSize-count],CharT{});
+        traits_type::assign(data()[kSize-count],CharT{});
       }
       return *this;
     }
@@ -247,7 +244,7 @@ class ClipString
       return *this;
     }
 
-    template<class StringViewLike, typename = std::enable_if_t<is_sv_convertible_v<StringViewLike>>>
+    template<class StringViewLike, typename = std::enable_if_t<is_sv_convertible<StringViewLike>::value>>
     constexpr ClipString& assign( const StringViewLike& t) noexcept // C++17 only
     {
       std::basic_string_view<CharT, Traits> sv = t;
@@ -270,7 +267,7 @@ class ClipString
       return *this;
     }
 
-    template<class StringViewLike, typename = std::enable_if_t<is_sv_convertible_v<StringViewLike>>>
+    template<class StringViewLike, typename = std::enable_if_t<is_sv_convertible<StringViewLike>::value>>
     constexpr ClipString& assign( const StringViewLike& t, size_type pos, size_type count) // C++17 only
     {
       if(pos > t.length()) throw std::out_of_range{};
@@ -416,7 +413,7 @@ class ClipString
       return assign(ilist);
     }
 
-    template<class StringViewLike, typename = std::enable_if_t<is_sv_convertible_v<StringViewLike>>>
+    template<class StringViewLike, typename = std::enable_if_t<is_sv_convertible<StringViewLike>::value>>
     ClipString& operator=( const StringViewLike& t )
     {
       return assign(t);
@@ -708,15 +705,15 @@ class ClipString
       return std::next(begin(), index);
     }
 
-    template<class StringViewLike, typename = std::enable_if_t<is_sv_convertible_v<StringViewLike>>>
+    template<class StringViewLike, typename = std::enable_if_t<is_sv_convertible<StringViewLike>::value>>
     constexpr ClipString& insert( size_type index, const StringViewLike& t )
     {
       std::basic_string_view<CharT, Traits> sv = t;
-      return insert(index, sv.c_str(), sv.lengt());
+      return insert(index, sv.c_str(), sv.length());
     }
 
-    template<class StringViewLike, typename = std::enable_if_t<is_sv_convertible_v<StringViewLike>>>
-    constexpr basic_string& insert(size_type index, const StringViewLike& t, size_type t_index, size_type count = npos)
+    template<class StringViewLike, typename = std::enable_if_t<is_sv_convertible<StringViewLike>::value>>
+    constexpr ClipString& insert(size_type index, const StringViewLike& t, size_type t_index, size_type count = npos)
     {
       std::basic_string_view<CharT,Traits> sv(t);
       if(t_index > sv.length()) throw std::out_of_range{sv.c_str()};
@@ -739,7 +736,7 @@ class ClipString
 
     constexpr iterator erase( const_iterator position ) noexcept
     {
-      size_type index = std::distance(cbegin(), pos);
+      size_type index = std::distance(cbegin(), position);
       size_type sz = size(); 
       size_type trailing = sz - (index + 1);
       traits_type::move(data() + index, data() + index + 1, trailing); // shift left 
@@ -761,7 +758,17 @@ class ClipString
       set_slack(index + trailing);
       return *this;
     }
-    
+
+    // copy -----------------
+    constexpr size_type copy( CharT* dest, size_type count, size_type pos = 0 ) const
+    {
+      size_type sz = size(); 
+      if(pos > sz) throw std::out_of_range{c_str()};
+      count = std::min(sz - pos, count);
+      traits_type::copy(dest, data() + pos, count);
+      return count;
+    }
+
     // push_back --------------
     void push_back(CharT ch) noexcept
     {
@@ -792,15 +799,13 @@ class ClipString
       set_slack(s - 1);
     }
 
-    // --------------
-    // append
-    // --------------
+    // append --------------
     constexpr ClipString& append(size_type count, CharT ch) noexcept { return insert(size(), count, ch); } 
     constexpr ClipString& append(const CharT* s, size_type count) noexcept { return insert(size(), s, count); } 
     constexpr ClipString& append(const CharT* s) noexcept { return insert(size(), s); } 
-    template< class SV, typename = std::enable_if_t<is_sv_convertible_v<SV>>>
+    template<class SV, typename = std::enable_if_t<is_sv_convertible<SV>::value>>
     constexpr ClipString& append( const SV& t ) noexcept { return insert<SV>(size(), t); }
-    template< class SV, typename = std::enable_if_t<is_sv_convertible_v<SV>>>
+    template<class SV, typename = std::enable_if_t<is_sv_convertible<SV>::value>>
     constexpr ClipString& append(const SV& t, size_type pos, size_type count = npos){ return insert(size(), t, pos, count); }
     template<std::size_t kSizeOther>    
     constexpr ClipString& append(const CopyableClipString<kSizeOther>& str) noexcept { return insert(size(), str); } 
@@ -810,28 +815,259 @@ class ClipString
     constexpr ClipString& append(InputIt first, InputIt last) noexcept { return insert<InputIt>(size(), first, last); }
     constexpr ClipString& append( std::initializer_list<CharT> ilist ) noexcept { return insert(size(), ilist); }
     
-    // --------------
-    // opertator+=
-    // --------------
+    // opertator+= --------------
     template<std::size_t kSizeOther>
-    constexpr ClipString& operator+=(const CopyableClipString<kSizeOther>& str) noexcept { return append<kSizeOther>(std); }
+    constexpr ClipString& operator+=(const CopyableClipString<kSizeOther>& str) noexcept { return append<kSizeOther>(str); }
     constexpr ClipString& operator+=(CharT ch) noexcept { push_back(ch); return *this; }
     constexpr ClipString& operator+=( const CharT* s ) noexcept { return append(s); }
     constexpr ClipString& operator+=(std::initializer_list<CharT> ilist) noexcept { return append(ilist); }
-    template< class StringViewLike, typename = std::enable_if_t<is_sv_convertible_v<StringViewLike>>>
+    template<class StringViewLike, typename = std::enable_if_t<is_sv_convertible<StringViewLike>::value>>
     ClipString& operator+=( const StringViewLike& t ) noexcept { return append<StringViewLike>(t); }
 
-    // --------------
-    // replace
-    // --------------
+    // replace --------------
+    template<std::size_t kSizeOther>
+    constexpr ClipString& replace( size_type pos, size_type count, const CopyableClipString<kSizeOther>& str )
+    {
+      UnsignedCharT f_other = str.get_flags() & Flags::FlagsMask; 
+      if(f_other!=0)
+      {
+        size_type slk = slack(); 
+        if(slk==0)
+        {
+          set_flags(flags() | f_other | Flags::Clipped); 
+          set_slack(1);
+          traits_type::assign(data()[kSize-1], CharT{});
+        }
+        else
+        {
+          set_flags(flags() | f_other); 
+        }
+      }
+      return replace(pos, count, str.c_str(), str.length());
+    }
 
-    // --------------
-    // copy
-    // --------------
+    template<std::size_t kSizeOther>
+    constexpr ClipString& replace(const_iterator first, const_iterator last, const CopyableClipString<kSizeOther>& str) noexcept
+    {
+      size_type pos = std::distance(cbegin(), first);
+      size_type count = std::distance(first, last); 
+      return replace(pos,count, str);
+    }
 
-    // --------------
-    // resize
-    // --------------
+    template<std::size_t kSizeOther>
+    constexpr ClipString& replace( size_type pos, size_type count, const CopyableClipString<kSizeOther>& str, size_type pos2, size_type count2 = npos)
+    {
+      UnsignedCharT f_other = str.get_flags() & Flags::FlagsMask; 
+      if(f_other!=0)
+      {
+        size_type slk = slack(); 
+        if(slk==0)
+        {
+          set_flags(flags() | f_other | Flags::Clipped); 
+          set_slack(1);
+          traits_type::assign(data()[kSize-1], CharT{});
+        }
+        else
+        {
+          set_flags(flags() | f_other); 
+        }
+      }
+      if(pos2 > str.size()) throw std::out_of_range{str.c_str()};
+      count2 = std::min(str.length() - pos2, count2);
+      return replace(pos, count, str.c_str() + pos2, count2);
+    }
+
+    constexpr ClipString& replace(size_type pos, size_type count, const CharT* cstr, size_type count2)
+    {
+      size_type sz = size();
+      if(pos > sz) throw std::out_of_range(c_str());
+      count = std::min(count, sz - pos);
+
+      // check for null ptr
+      if(cstr==nullptr)
+      {
+        size_type slk = slack(); 
+        if(slk==0) // full size!
+        {
+          // have to back up size by 1. -> clipped something
+          traits_type::assign(data()[kSize-1],CharT{});
+          set_flags(flags() | Flags::NullptrPassed | Flags::Clipped);
+          set_slack(1);
+        }
+        else
+        {
+          set_flags(flags() | Flags::NullptrPassed);
+        }
+        return *this;
+      }      
+
+      if(count == count2) // no need to worry about clipping
+      {
+        traits_type::copy(data() + pos, cstr, count);
+      }
+      else if(count > count2) // still no need to worry about clipping
+      {
+        traits_type::copy(data() + pos, cstr, count2); // copy cstrinto this
+        traits_type::move(data() + pos + count2, data() + pos + count, sz - (pos + count)); // move trailing to the left
+        sz = sz - (count - count2); // calculate new size
+        traits_type::assign(data()[sz],CharT{}); // null terminator 
+        set_slack(kSize - sz); // update slack
+      }
+      else // at risk of clipping characters when expanding
+      {
+        size_type future_sz = sz - count + count2;
+        if(future_sz > capacity())
+        {
+          // a clip is necessary
+          traits_type::assign(data()[kSize-1],CharT{}); // null terminate
+  
+          // shrink count2 if that is what would cause the truncation to occur
+          count2 = std::min((kSize-1)-pos, count2);
+          
+          // how much data can be moved rightward? 
+          size_type moveable = (kSize-1) - pos - count2;
+
+          traits_type::move(data() + pos + count2, data() + pos + count, moveable);
+          
+          // copy into pos
+          traits_type::copy(data()+pos, cstr,count2);
+
+          set_flags(flags() | Flags::Clipped); // set the clipped flag
+          set_slack(1);
+        }
+        else
+        {
+          // no clip needed
+          traits_type::assign(data()[future_sz],CharT{}); // null terminate
+          traits_type::move(data() + pos + count2, data() + pos + count, sz - pos - count); // shift right
+          traits_type::copy(data()+pos, cstr,count2); // copy into pos
+          set_slack(kSize-future_sz);
+        }
+      }
+      return *this;
+    }
+
+    constexpr ClipString& replace(const_iterator first, const_iterator last, const CharT* cstr, size_type count2) noexcept
+    {
+      size_type pos = std::distance(cbegin(), first);
+      size_type count = std::distance(first,last);
+      return replace(pos,count,cstr,count2);
+    }
+
+    constexpr ClipString& replace(size_type pos, size_type count, const CharT* cstr)
+    {
+      if(cstr == nullptr)
+      {
+        if(slack()==0) // full size!
+        {
+          // back up by 1. -> clipped
+          traits_type::assign(data()[kSize-1],CharT{});
+          set_flags(flags() | Flags::NullptrPassed | Flags::Clipped);
+          set_slack(1); 
+        }
+        else
+        {
+          set_flags(flags() | Flags::NullptrPassed);
+        }
+        return *this;
+      } 
+      return replace(pos,count,cstr,traits_type::length(cstr)); 
+    }
+
+    constexpr ClipString& replace( const_iterator first, const_iterator last, const CharT* cstr ) noexcept
+    {
+      size_type pos = std::distance(cbegin(), first);
+      size_type count = std::distance(first,last);
+      return replace(pos,count,cstr);
+    }
+                          
+    constexpr ClipString& replace(size_type pos, size_type count, size_type count2, CharT ch)
+    {
+      size_type sz = size();
+      if(pos > sz) throw std::out_of_range(c_str());
+      count = std::min(count, sz - pos);
+
+      if(count == count2) // no need to worry about clipping
+      {
+        traits_type::assign(data() + pos, count, ch);
+      }
+      else if(count > count2) // still no need to worry about clipping
+      {
+        traits_type::assign(data() + pos, count2, ch); // copy cstrinto this
+        traits_type::move(data() + pos + count2, data() + pos + count, sz - (pos + count)); // move trailing to the left
+        sz = sz - (count - count2); // calculate new size
+        traits_type::assign(data()[sz],CharT{}); // null terminator 
+        set_slack(kSize - sz); // update slack
+      }
+      else // at risk of clipping characters when expanding
+      {
+        size_type future_sz = sz - count + count2;
+        if(future_sz > capacity())
+        {
+          // a clip is necessary
+          traits_type::assign(data()[kSize-1],CharT{}); // null terminate
+  
+          // shrink count2 if that is what would cause the truncation to occur
+          count2 = std::min((kSize-1)-pos, count2);
+          
+          // how much data can be moved rightward? 
+          size_type moveable = (kSize-1) - pos - count2;
+          traits_type::move(data() + pos + count2, data() + pos + count, moveable);
+          
+          // copy into pos
+          traits_type::assign(data()+pos,count2, ch);
+
+          set_flags(flags() | Flags::Clipped); // set the clipped flag
+          set_slack(1);
+        }
+        else
+        {
+          // no clip needed
+          traits_type::assign(data()[future_sz],CharT{}); // null terminate
+          traits_type::move(data() + pos + count2, data() + pos + count, sz - pos - count); // shift right
+          traits_type::assign(data()+pos, count2, ch); // copy into pos
+          set_slack(kSize-future_sz);
+        }
+      }
+      return *this;
+    }
+
+    template< class InputIt >
+    constexpr ClipString& replace(const_iterator first, const_iterator last,InputIt first2, InputIt last2) noexcept 
+    {
+      ClipString temp(first2,last2);
+      return replace(first,last,temp);
+    }
+
+    constexpr ClipString& replace( const_iterator first, const_iterator last, std::initializer_list<CharT> ilist ) noexcept
+    {
+      ClipString temp(ilist);
+      return replace(first,last,temp);
+    }  
+                          
+    template<class StringViewLike, typename = std::enable_if_t<is_sv_convertible<StringViewLike>::value>>
+    constexpr ClipString& replace(size_type pos, size_type count, const StringViewLike& t)
+    {
+      std::basic_string_view<CharT,Traits> sv(t);
+      return replace(pos,count,sv.c_str(), sv.length());
+    }
+
+    template<class StringViewLike, typename = std::enable_if_t<is_sv_convertible<StringViewLike>::value>>
+    constexpr ClipString& replace(const_iterator first, const_iterator last, const StringViewLike& t) noexcept
+    {
+      std::basic_string_view<CharT,Traits> sv(t);
+      return replace(first,last,sv.c_str(), sv.length());
+    }                   
+
+    template<class StringViewLike, typename = std::enable_if_t<is_sv_convertible<StringViewLike>::value>>
+    constexpr ClipString& replace(size_type pos, size_type count, const StringViewLike& t,size_type pos2, size_type count2 = npos)
+    {
+      std::basic_string_view<CharT,Traits> sv(t);
+      size_type actual_count = std::min(count2, sv.length() - pos2)
+      return replace(pos,count,sv.c_str() + pos2, actual_count);
+    }
+
+    // resize --------------
     constexpr void resize( size_type count, CharT ch = CharT{} )
     {
       if(count > capacity())

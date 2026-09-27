@@ -21,8 +21,8 @@
 #include<string> // still need std::char_traits
 #include<iostream> 
 
-#ifndef _CLIPSTRING_CLIPSTRING_H
-#define _CLIPSTRING_CLIPSTRING_H
+#ifndef CLIPSTRING_CLIPSTRING_H
+#define CLIPSTRING_CLIPSTRING_H
 
 using std::cout;
 
@@ -71,9 +71,9 @@ class ClipString
       static constexpr UnsignedCharT ShortSlackMask = static_cast<UnsignedCharT>(~(FlagsMask | ExtraSlack));
     };
 
-    // Constructors + destructor ---------------------
-
-    // default
+    // ====================
+    // Constructors  
+    // ====================
     constexpr ClipString() noexcept
     {
       clear();
@@ -84,8 +84,8 @@ class ClipString
       assign(count, ch);
     }
 
-    template< class InputIt >
-    constexpr ClipString( InputIt first, InputIt last) noexcept
+    template<class InputIt>
+    constexpr ClipString(InputIt first, InputIt last) noexcept
     {
       assign<InputIt>(first,last);
     }
@@ -95,13 +95,13 @@ class ClipString
       assign(s,count);
     }
 
-    constexpr ClipString( const CharT* s) noexcept
+    constexpr ClipString(const CharT* s) noexcept
     {
       assign(s);
     }
 
-    template<class StringViewLike>
-    constexpr ClipString( const StringViewLike& t) noexcept // C++17 only
+    template<class StringViewLike, typename = std::enable_if_t<!std::is_same_v<StringViewLike,const CharT*> && !std::is_same_v<StringViewLike,CharT*>>>
+    constexpr ClipString(const StringViewLike& t) noexcept // C++17 only
     {
       assign<StringViewLike>(t);
     }
@@ -135,9 +135,12 @@ class ClipString
       assign(ilist);
     }
 
-    // ------------------------
-    // Assign 
-    // ------------------------
+    ClipString( std::nullptr_t ) = delete;
+
+    // destructor ------------------------
+    ~ClipString()=default;
+
+    // Assign ------------------------ 
     constexpr ClipString& assign(size_type count, CharT ch) noexcept
     {
       if(count <= kSize)
@@ -159,7 +162,7 @@ class ClipString
     }
 
     template< class InputIt >
-    constexpr ClipString&  assign( InputIt first, InputIt last) noexcept
+    constexpr ClipString&  assign(InputIt first, InputIt last) noexcept
     {
       size_type count = std::distance(first, last); // TODO not actually single pass through range
       if(count <= kSize)
@@ -186,10 +189,10 @@ class ClipString
 
     constexpr ClipString& assign(const CharT* s, size_type count) noexcept
     {
-      if(!s)
+      if(s == nullptr)
       {
         clear();
-        set_flags(Flags::NullptrPassed);
+        set_flags(flags() | Flags::NullptrPassed);
         return *this;
       }
       if(count <= kSize)
@@ -212,10 +215,10 @@ class ClipString
 
     constexpr ClipString& assign( const CharT* s) noexcept
     {
-      if(!s)
+      if(s == nullptr)
       {
         clear();
-        set_flags(Flags::NullptrPassed);
+        set_flags( flags() | Flags::NullptrPassed);
         return *this;
       }
       size_type count = traits_type::length(s);
@@ -237,7 +240,7 @@ class ClipString
       return *this;
     }
 
-    template<class StringViewLike>
+    template<class StringViewLike, typename = std::enable_if_t<!std::is_same_v<StringViewLike,const CharT*> && !std::is_same_v<StringViewLike,CharT*>>>
     constexpr ClipString& assign( const StringViewLike& t) noexcept // C++17 only
     {
       std::basic_string_view<CharT, Traits> sv = t;
@@ -384,15 +387,48 @@ class ClipString
       return *this;
     }
 
-    // destructor
-    ~ClipString()=default;
+    // operator= -------------------------
+    template<std::size_t kSizeOther>
+    constexpr ClipString& operator=(const CopyableClipString<kSizeOther>& other) noexcept
+    {
+      return assign(other);
+    }
 
-    // Member Functions -----------------
+    constexpr ClipString& operator=(const CharT* s) noexcept
+    {
+      return assign(s);
+    }
+
+    constexpr ClipString& operator=(CharT ch) noexcept
+    {
+      return assign(std::addressof(ch),1);
+    }
+
+    constexpr ClipString& operator=( std::initializer_list<CharT> ilist ) noexcept
+    {
+      return assign(ilist);
+    }
+
+    template<class StringViewLike>
+    ClipString& operator=( const StringViewLike& t )
+    {
+      return assign(t);
+    }
+
+    ClipString& operator=( std::nullptr_t ) = delete;
+
+    // get_allocate (deleted) ---------------------
+    void get_allocator() const = delete;
+
+    // ===========================
+    // Member Functions
+    // ===========================
     bool clipped() const noexcept { return ((flags() & Flags::Clipped)!=0); }
     bool null_passed() const noexcept { return ((flags() & Flags::NullptrPassed)!=0); }
 
-    // Element access ------------------
-
+    // ===========================
+    // Element access 
+    // ===========================
     constexpr reference at(size_type i)
     {
       if(i >= size()) throw std::out_of_range{};
@@ -414,7 +450,9 @@ class ClipString
     constexpr const_pointer c_str() const noexcept { return reinterpret_cast<const CharT*>(m_data.data()); }
     constexpr operator std::basic_string_view<CharT,Traits>() const noexcept { return {data(), size()}; } // C++17 only
 
-    // Iterators -------------- 
+    // ===========================
+    // Iterators
+    // ===========================
     constexpr iterator begin() noexcept { return data(); }
     constexpr const_iterator begin() const noexcept { return data(); }
     constexpr const_iterator cbegin() const noexcept { return data(); }
@@ -428,7 +466,9 @@ class ClipString
     constexpr const_reverse_iterator rend() const noexcept { return std::make_reverse_iterator(cbegin()); }
     constexpr const_reverse_iterator crend() const noexcept { return std::make_reverse_iterator(cbegin()); }
 
-    // Capacity ---------------- 
+    // ===========================
+    // Capacity  
+    // ===========================
     constexpr bool empty() const noexcept { return (slack()==kSize); }
     constexpr size_type size() const noexcept { return kSize - slack(); }
     constexpr size_type length() const noexcept { return kSize - slack(); }
@@ -437,30 +477,53 @@ class ClipString
     size_type capacity() const noexcept { return ((flags() & Flags::FlagsMask)!=0) ? kSize-1 : kSize; } // if flags are set. can't be null terminator
     size_type shrink_to_fit()=delete;
 
-    // Modifiers ----------------- 
+    // ===========================
+    // Modifiers  
+    // ===========================
+
+    // clear ----------------------
     constexpr void clear() noexcept
     { 
-      CharT zero{};
-      std::memcpy(m_data.data(), &zero, sizeof(zero));
+      traits_type::assign(data()[0], CharT{});
       set_flags(0x00);
       set_slack(kSize);
     }
 
-    // --------------
-    // Insert 
-    // --------------
+    // Insert -------------- 
 
     // --------------
     // erase
     // --------------
 
-    // --------------
-    // push_back
-    // --------------
+    // push_back --------------
+    void push_back(CharT ch) noexcept
+    {
+      UnsignedCharT f = flags();
+      UnsignedCharT s = f & Flags::SlackMask;
+      // considered a clip if any flag is set, and at size kSize-1. or if at size kSize.
+      // maybe useful to silently toggle NullptrPass? 
+      bool possible = ((f & Flags::FlagsMask)!=0) ? (s>1) : (s!=0);
+      if(possible)
+      {
+        traits_type::assign(data()[kSize-s-1], ch);
+        traits_type::assign(data()[kSize-s], CharT{});
+        set_slack(s-1);
+      }
+      else
+      {
+        traits_type::assign(data()[kSize-1], CharT{}); // clip last character.
+        set_flags((f & Flags::FlagsMask) | Flags::Clipped | UnsignedCharT{1}); // set clipped as true
+      }
+    }
 
-    // --------------
-    // pop_back
-    // --------------
+    // pop_back --------------
+    constexpr void pop_back() noexcept
+    {
+      // UB if empty() == true
+      std::size_t s = slack();
+      traits_type::assign(*reinterpret_cast<CharT*>(m_data.data() + kSize - s),CharT{});
+      set_slack(s - 1);
+    }
 
     // --------------
     // append
@@ -500,6 +563,16 @@ class ClipString
         set_slack(kSize - count);
       }
     }
+
+    // swap --------------
+    template<std::size_t kSizeOther>
+    constexpr void swap(CopyableClipString<kSizeOther>& other) noexcept
+    {
+      CopyableClipString<kSizeOther> temp(other); 
+      other.assign(*this);
+      assign(temp);
+      set_flags(temp.flags() & Flags::FlagsMask);
+    } 
 
   public: // TODO make protected
     // Implementations ------------------

@@ -724,7 +724,44 @@ class ClipString
     }
 
     // erase --------------
+    constexpr ClipString& erase( size_type index = 0, size_type count = npos )
+    {
+      size_type sz = size(); 
+      if(index > sz) throw std::out_of_range{c_str()};
+      size_type erased = std::min(count, sz - index);
+      size_type trailing = sz - (index + erased);
+      traits_type::move(data() + index, data() + index + erased, trailing); // shift left 
+      traits_type::assign(data()[index + trailing], CharT{}); // null terminate
+      // update slack
+      set_slack(index + trailing);
+      return *this;
+    }
 
+    constexpr iterator erase( const_iterator position ) noexcept
+    {
+      size_type index = std::distance(cbegin(), pos);
+      size_type sz = size(); 
+      size_type trailing = sz - (index + 1);
+      traits_type::move(data() + index, data() + index + 1, trailing); // shift left 
+      traits_type::assign(data()[index + trailing], CharT{}); // null terminate
+      // update slack
+      set_slack(index + trailing);
+      return *this;
+    }
+
+    constexpr iterator erase( const_iterator first, const_iterator last ) noexcept
+    {
+      size_type sz = size(); 
+      size_type index = std::distance(cbegin(), first);
+      size_type erased = std::distance(first,last);
+      size_type trailing = sz - (index + erased);
+      traits_type::move(data() + index, data() + index + erased, trailing); // shift left 
+      traits_type::assign(data()[index + trailing], CharT{}); // null terminate
+      // update slack
+      set_slack(index + trailing);
+      return *this;
+    }
+    
     // push_back --------------
     void push_back(CharT ch) noexcept
     {

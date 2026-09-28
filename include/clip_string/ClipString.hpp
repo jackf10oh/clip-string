@@ -19,7 +19,9 @@
 #include<array>
 #include<algorithm>
 #include<string> // still need std::char_traits
+#include <string_view>
 #include<iostream> 
+#include<type_traits>
 
 #ifndef CLIPSTRING_CLIPSTRING_H
 #define CLIPSTRING_CLIPSTRING_H
@@ -1063,7 +1065,7 @@ class ClipString
     constexpr ClipString& replace(size_type pos, size_type count, const StringViewLike& t,size_type pos2, size_type count2 = npos)
     {
       std::basic_string_view<CharT,Traits> sv(t);
-      size_type actual_count = std::min(count2, sv.length() - pos2)
+      size_type actual_count = std::min(count2, sv.length() - pos2);
       return replace(pos,count,sv.c_str() + pos2, actual_count);
     }
 
@@ -1097,6 +1099,115 @@ class ClipString
       assign(temp);
       set_flags(temp.flags() & Flags::FlagsMask);
     } 
+
+    // -----------------------
+    // Search
+    // -----------------------
+
+    // find ------------------ 
+    template<std::size_t kSizeOther>
+    constexpr size_type find(const CopyableClipString<kSizeOther>& str, size_type pos=0) const noexcept
+    {
+      return find(str.c_str(), pos, str.length());
+    }
+
+    constexpr size_type find(const CharT* str, size_type pos, size_type count) const noexcept
+    {
+      if(!str) return npos;
+      size_type sz = size();
+      if(count > sz) return npos;
+      size_type end = sz - count;
+      for (; pos < end; ++pos)
+      {
+        if (traits_type::compare(data() + pos, str, count) == 0)
+        {
+          return pos;
+        }
+      }
+      return npos;
+    }
+
+    constexpr size_type find(const CharT* str, size_type pos=0) const noexcept
+    {
+      if(!str) return npos;
+      return find(str, pos, traits_type::length(str));
+    }
+
+    size_type find( CharT ch, size_type pos = 0 ) const noexcept
+    {
+      size_type result = npos;
+      const size_type sz = this->size();
+      if (pos < sz)
+      {
+        const size_type n = sz - pos;
+        const CharT* ptr = traits_type::find(data() + pos, n, ch);
+        if (ptr) result = ptr - data();
+      }
+      return result;      
+    }
+
+    template<class StringViewLike, typename = std::enable_if_t<is_sv_convertible<StringViewLike>::value>>
+    size_type find(const StringViewLike& t, size_type pos = 0 ) const // TODO noexcept(std::is_nothrow_convertible_v<const StringViewLike&, std::basic_string_view<CharT, Traits>>)
+    {
+      std::basic_string_view<CharT,Traits> sv(t);
+      return find(sv.c_str(), pos, sv.length());
+    }
+
+    // rfind ----------------------
+    template<std::size_t kSizeOther>
+    constexpr size_type rfind(const CopyableClipString<kSizeOther>& str, size_type pos=npos) const noexcept
+    {
+      return rfind(str.c_str(), pos, str.length());
+    }
+
+    constexpr size_type rfind(const CharT* str, size_type pos, size_type count) const noexcept
+    {
+      size_type sz = size();
+      if((str==nullptr) || (count==0))
+      {
+        return (sz!=0) ? std::min(pos,sz) : npos;
+      }
+      if(count > sz) return npos;
+      size_type end = sz - count;
+      pos = std::min(pos,end);
+      do
+      {
+        if (traits_type::compare(data() + pos, str, count) == 0)
+        {
+          return pos;
+        }
+      } while (pos-- != 0);
+      return npos;
+    }
+
+    constexpr size_type rfind(const CharT* str, size_type pos=npos) const noexcept
+    {
+      if(!str) return npos;
+      return rfind(str, pos, traits_type::length(str));
+    }
+
+    size_type rfind(CharT ch, size_type pos = npos) const noexcept
+    {
+      const size_type sz = size();
+      if (sz == 0) return npos;
+      pos = std::min(pos, sz - 1);
+      do
+      {
+          if (traits_type::eq(data()[pos], ch))
+          {
+            return pos;
+          }
+      }
+      while (pos-- != 0);
+      return npos;
+    }
+
+    template<class StringViewLike, typename = std::enable_if_t<is_sv_convertible<StringViewLike>::value>>
+    size_type rfind(const StringViewLike& t, size_type pos = npos ) const // TODO noexcept(std::is_nothrow_convertible_v<const StringViewLike&, std::basic_string_view<CharT, Traits>>)
+    {
+      std::basic_string_view<CharT,Traits> sv(t);
+      return rfind(sv.c_str(), pos, sv.length());
+    }
 
   public: // TODO make protected
     // Implementations ------------------

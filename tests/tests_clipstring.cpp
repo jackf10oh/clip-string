@@ -210,10 +210,39 @@ TYPED_TEST(STLContainerSuite, Capacity){
   ASSERT_EQ(m, kSize);
 }
 
-TYPED_TEST(STLContainerSuite, PushBackPopBack){
+TYPED_TEST(STLContainerSuite, PushBack){
   constexpr std::size_t kSize = TypeParam::kSize;
   using CharT = typename TypeParam::CharT;
+
+  ClipString<kSize,CharT> str_01; 
+  str_01.push_back(TypeParam::kCharacter);
+  ASSERT_EQ(str_01[0], TypeParam::kCharacter);
+
+  ClipString<kSize,CharT> str_02(kSize,TypeParam::kCharacter);
+  ASSERT_FALSE(str_02.clipped());
+  str_02.push_back('B');
+  ASSERT_TRUE(str_02.clipped());
+
+  constexpr std::size_t kSize2 = std::max(std::size_t{1},kSize/2);
+  ClipString<kSize,CharT> str_03(kSize2,'B'); 
+  str_03.push_back(TypeParam::kCharacter);
+  if(!str_03.clipped()) ASSERT_EQ(str_03[kSize2], TypeParam::kCharacter);
 }
 
+TYPED_TEST(STLContainerSuite, PopBack){
+  constexpr std::size_t kSize = TypeParam::kSize;
+  using CharT = typename TypeParam::CharT;
 
+  ClipString<kSize,CharT> str_01(1,TypeParam::kCharacter);
+  ASSERT_FALSE(str_01.empty());
+  str_01.pop_back(); 
+  ASSERT_TRUE(str_01.empty());
+
+  ClipString<kSize,CharT> str_02(kSize,TypeParam::kCharacter);
+  ASSERT_EQ(str_02.length(), kSize);
+  str_02.pop_back(); 
+  ASSERT_EQ(str_02.length(), kSize-1);
+  std::size_t len = ClipString<kSize,CharT>::traits_type::length(str_02.c_str());
+  ASSERT_EQ(str_02.length(), len);
+}
 

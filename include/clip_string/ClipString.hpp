@@ -180,15 +180,22 @@ class ClipString
       // if we wrote exactly kSize entries and haven't reach the end of [first,last) -> clipped the range
       if((count==kSize) && (first!=last))
       {
-        set_flags(Flags::Clipped);
-        set_slack(1);
-        traits_type::assign(data()[kSize-1],CharT{});
+        if(first!=last)
+        {
+          set_flags(Flags::Clipped);
+          set_slack(1);
+          traits_type::assign(data()[kSize-1],CharT{});
+        }
+        else
+        {
+          set_flags(0x00); // set all flags to false, sets ExtraSlack bit to false, also sets slack to 0
+        }
       }
       else
       {
         set_flags(0x00);
         set_slack(kSize-count);
-        traits_type::assign(data()[kSize-count],CharT{});
+        traits_type::assign(data()[count],CharT{});
       }
       return *this;
     }
@@ -451,10 +458,10 @@ class ClipString
     constexpr const_reference front() const noexcept{ return data()[0]; }
     constexpr reference back() noexcept { return data()[size()-1]; }
     constexpr const_reference back() const noexcept{ return data()[size()-1]; }
-    constexpr pointer data() noexcept { return reinterpret_cast<CharT*>(m_data.data()); }
-    constexpr const_pointer data() const noexcept { return reinterpret_cast<const CharT*>(m_data.data()); }
-    constexpr const_pointer c_str() const noexcept { return reinterpret_cast<const CharT*>(m_data.data()); }
-    constexpr operator std::basic_string_view<CharT,Traits>() const noexcept { return {data(), size()}; } // C++17 only
+    constexpr pointer data() noexcept { return m_data.data(); }
+    constexpr const_pointer data() const noexcept { return m_data.data(); }
+    constexpr const_pointer c_str() const noexcept { return m_data.data(); }
+    constexpr operator std::basic_string_view<CharT,Traits>() const noexcept { return {c_str(), size()}; } // C++17 only
 
     // ===========================
     // Iterators
@@ -774,21 +781,22 @@ class ClipString
     // push_back --------------
     void push_back(CharT ch) noexcept
     {
-      UnsignedCharT f = flags();
-      UnsignedCharT s = f & Flags::SlackMask;
+      UnsignedCharT f = flags() & Flags::FlagsMask;
+      size_type s = slack();
       // considered a clip if any flag is set, and at size kSize-1. or if at size kSize.
       // maybe useful to silently toggle NullptrPass? 
-      bool possible = ((f & Flags::FlagsMask)!=0) ? (s>1) : (s!=0);
+      bool possible = (f!=0) ? (s>1) : (s!=0);
       if(possible)
       {
-        traits_type::assign(data()[kSize-s-1], ch);
-        traits_type::assign(data()[kSize-s], CharT{});
+        traits_type::assign(data()[kSize-s], ch);
+        traits_type::assign(data()[kSize-s+1], CharT{});
         set_slack(s-1);
       }
       else
       {
         traits_type::assign(data()[kSize-1], CharT{}); // clip last character.
-        set_flags((f & Flags::FlagsMask) | Flags::Clipped | UnsignedCharT{1}); // set clipped as true
+        set_flags(f | Flags::Clipped); // set clipped as true. 
+        set_slack(1);
       }
     }
 
@@ -797,8 +805,8 @@ class ClipString
     {
       // UB if empty() == true
       std::size_t s = slack();
-      traits_type::assign(data()[kSize - s],CharT{});
-      set_slack(s - 1);
+      traits_type::assign(data()[kSize - s - 1],CharT{});
+      set_slack(s + 1);
     }
 
     // append --------------
@@ -1209,18 +1217,23 @@ class ClipString
       return rfind(sv.c_str(), pos, sv.length());
     }
 
+    // ------------------
+    // Operations 
+    // ------------------ 
+
+
   public: // TODO make protected
     // Implementations ------------------
     UnsignedCharT flags() const noexcept 
     {
       UnsignedCharT flags; 
-      std::memcpy(&flags, &m_data[sizeof(CharT) * kSize], sizeof(UnsignedCharT));
+      std::memcpy(&flags, &m_data[kSize], sizeof(UnsignedCharT));
       return flags;
     }
 
     void set_flags(UnsignedCharT f) noexcept
     {
-      std::memcpy(&m_data[sizeof(CharT) * kSize], &f, sizeof(UnsignedCharT));
+      std::memcpy(&m_data[kSize], &f, sizeof(UnsignedCharT));
     }
 
     size_type slack() const
@@ -1235,8 +1248,8 @@ class ClipString
         {
           // store the std::size_t in the bytes just before m_flags.
           // since we hold a much smaller string it should never collide with this data. 
-          std::size_t result;
-          std::memcpy(&result, &m_data[sizeof(CharT)*(kSize)-sizeof(std::size_t)], sizeof(std::size_t));
+          size_type result;
+          std::memcpy(&result, reinterpret_cast<const unsigned char*>(&m_data[kSize])-sizeof(std::size_t), sizeof(std::size_t));
           return result;
         }
         else
@@ -1272,7 +1285,7 @@ class ClipString
     }
 
     // Member Data
-    alignas(CharT) std::array<std::uint8_t, (kSize+1)*sizeof(CharT)> m_data;
+    std::array<CharT, kSize+1> m_data;
     // kSize CharT character slots + one UnsignedCharT metadata slot.
     // When no flags are set and slack == 0, the metadata slot is zero
     // and therefore serves as the null terminator for a kSize-character string.

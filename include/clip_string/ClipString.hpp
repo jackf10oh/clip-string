@@ -215,13 +215,25 @@ class ClipString
         set_flags(static_cast<UnsignedCharT>(~Flags::FlagsMask));
         set_slack(kSize-count);
       }
+      // if we wrote exactly kSize entries and haven't reach the end of [first,last) -> clipped the range
+      if((count==kSize) && (first!=last))
+      {
+        if(first!=last)
+        {
+          set_flags(Flags::Clipped);
+          set_slack(1);
+          traits_type::assign(data()[kSize-1],CharT{});
+        }
+        else
+        {
+          set_flags(0x00); // set all flags to false, sets ExtraSlack bit to false, also sets slack to 0
+        }
+      }
       else
       {
-        // need to set flags + clip
-        traits_type::assign(data(), kSize-1, ch);
-        traits_type::assign(data()[kSize-1], CharT{});
-        set_flags(Flags::Clipped);
-        set_slack(1);
+        set_flags(0x00);
+        set_slack(kSize-count);
+        traits_type::assign(data()[count],CharT{});
       }
       return *this;
     }
@@ -1231,6 +1243,11 @@ class ClipString
     // Operations 
     // ------------------ 
 
+
+    // ------------------
+    // Operations 
+    // ------------------ 
+
     // compare ----------------------
     template<std::size_t kSizeOther>
     constexpr int compare(const CopyableClipString<kSizeOther>& str) const noexcept 
@@ -1343,6 +1360,7 @@ class ClipString
     void set_flags(UnsignedCharT f) noexcept
     {
       std::memcpy(&m_data[kSize], &f, sizeof(UnsignedCharT));
+      std::memcpy(&m_data[kSize], &f, sizeof(UnsignedCharT));
     }
 
     size_type slack() const
@@ -1357,6 +1375,8 @@ class ClipString
         {
           // store the std::size_t in the bytes just before m_flags.
           // since we hold a much smaller string it should never collide with this data. 
+          size_type result;
+          std::memcpy(&result, reinterpret_cast<const unsigned char*>(&m_data[kSize])-sizeof(std::size_t), sizeof(std::size_t));
           size_type result;
           std::memcpy(&result, reinterpret_cast<const unsigned char*>(&m_data[kSize])-sizeof(std::size_t), sizeof(std::size_t));
           return result;

@@ -1243,6 +1243,89 @@ class ClipString
     // Operations 
     // ------------------ 
 
+    // compare ----------------------
+    template<std::size_t kSizeOther>
+    constexpr int compare(const CopyableClipString<kSizeOther>& str) const noexcept 
+    { 
+      return compare_impl(c_str(), length(), str.c_str(), str.length()); 
+    }
+
+    template<std::size_t kSizeOther>
+    constexpr int compare(size_type pos1, size_type count1, const CopyableClipString<kSizeOther>& str) const
+    { 
+      size_type sz = length(); 
+      if(pos1 > sz) throw std::out_of_range(c_str());
+      size_type clamped = std::min(length()-pos1, count1);
+      return compare_impl(c_str()+pos1, clamped, str.c_str(), str.length()); 
+    }
+
+    template<std::size_t kSizeOther>
+    constexpr int compare( size_type pos1, size_type count1, const CopyableClipString<kSizeOther>& str, size_type pos2, size_type count2 = npos ) const
+    {
+      size_type sz1 = length(); 
+      if(pos1 > sz1) throw std::out_of_range(c_str());
+      size_type sz2 = str.length(); 
+      if(pos2 > sz2) throw std::out_of_range(str.c_str());
+      size_type clamped = std::min(sz1-pos1,count1);
+      size_type clamped2 = std::min(sz2-pos2,count2);
+      return compare_impl(c_str()+pos1, clamped, str.c_str()+pos2, clamped2); 
+    }
+
+    constexpr int compare( const CharT* s ) const noexcept
+    {
+      if(s==nullptr) return 1; // nullptr is considered < ALL strings.
+      size_type len = traits_type::length(s);
+      return compare_impl(c_str(), length(), s, len);
+    }
+
+    constexpr int compare( size_type pos1, size_type count1, const CharT* s) const
+    {
+      size_type sz = length();
+      if(pos1 > sz) throw std::out_of_range(c_str());
+      if(s==nullptr) return 1;
+      size_type len = traits_type::length(s);
+      size_type clamped = std::min(sz-pos1,count1);
+      return compare_impl(c_str()+pos1, clamped, s, len); 
+    }
+
+    constexpr int compare( size_type pos1, size_type count1, const CharT* s, size_type count2 ) const
+    {
+      size_type sz = length();
+      if(pos1 > sz) throw std::out_of_range(c_str());
+      if(s==nullptr) return 1;
+      size_type clamped = std::min(sz-pos1,count1);
+      return compare_impl(c_str()+pos1, clamped, s, count2); 
+    }
+
+    template<class StringViewLike, typename = std::enable_if_t<is_sv_convertible<StringViewLike>::value>>
+    constexpr int compare( const StringViewLike& t ) const // TODO noexcept(...)
+    {
+      std::basic_string_view<CharT,Traits> sv(t);
+      return compare_impl(c_str(), length(), sv.c_str(), sv.length());
+    }
+
+    template<class StringViewLike, typename = std::enable_if_t<is_sv_convertible<StringViewLike>::value>>
+    constexpr int compare( size_type pos1, size_type count1, const StringViewLike& t ) const
+    {
+      size_type sz = length();
+      if(pos1 > sz) throw std::out_of_range(c_str());
+      std::basic_string_view<CharT,Traits> sv(t);
+      size_type clamped = std::min(sz-pos1,count1);
+      return compare_impl(c_str()+pos1, clamped, sv.c_str(), sv.length());
+    }
+
+    template<class StringViewLike, typename = std::enable_if_t<is_sv_convertible<StringViewLike>::value>>
+    int compare( size_type pos1, size_type count1, const StringViewLike& t, size_type pos2, size_type count2 = npos) const // TODO noexcept(...)
+    {
+      size_type sz = length();
+      if(pos1 > sz) throw std::out_of_range(c_str());
+      std::basic_string_view<CharT,Traits> sv(t);
+      size_type sz2 = sv.length();
+      if(pos2 > sz2) throw std::out_of_range(sv.c_str());
+      size_type clamped = std::min(sz-pos1, count1);
+      size_type clamped2 = std::min(sz2-pos2, count2);
+      return compare_impl(c_str()+pos1, clamped, sv.c_str()+pos2, clamped2);
+    }
 
     // ------------------
     // Operations 

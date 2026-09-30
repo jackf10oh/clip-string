@@ -34,7 +34,7 @@ class ClipString
   static_assert(std::is_standard_layout_v<CharT>);
   static_assert(std::is_integral_v<CharT>);
 
-  private:
+  public: // TODO make private
     // Friends ------------------- 
     template<std::size_t kSizeOther, typename CharU, typename TraitsU>
     friend class ClipString;
@@ -744,7 +744,7 @@ class ClipString
       traits_type::move(data() + index, data() + index + erased, trailing); // shift left 
       traits_type::assign(data()[index + trailing], CharT{}); // null terminate
       // update slack
-      set_slack(index + trailing);
+      set_slack(kSize - (index + trailing));
       return *this;
     }
 
@@ -1107,7 +1107,7 @@ class ClipString
     template<std::size_t kSizeOther>
     constexpr void swap(CopyableClipString<kSizeOther>& other) noexcept
     {
-      CopyableClipString<kSizeOther> temp(other); 
+      CopyableClipString<std::min(kSize,kSizeOther)> temp(other); 
       other.assign(*this);
       assign(temp);
       set_flags(temp.flags() & Flags::FlagsMask);
@@ -1438,6 +1438,204 @@ ClipString<kSize1, CharT, Traits> operator+(CharT ch, const ClipString<kSize1, C
   ClipString<kSize1,CharT,Traits> result(1, ch);
   result.append(rhs);
   return result;
+}
+
+// operator!=,operator==,operator<,operator<=,operator>,operator>=, 2 ClipString
+template<std::size_t kSize1, std::size_t kSize2, typename CharT, typename Traits>
+constexpr bool operator!=(const ClipString<kSize1,CharT,Traits>& lhs, const ClipString<kSize1,CharT,Traits>& rhs) noexcept { return lhs.compare(rhs)!=0; }
+
+template<std::size_t kSize1, std::size_t kSize2, typename CharT, typename Traits>
+constexpr bool operator==(const ClipString<kSize1,CharT,Traits>& lhs, const ClipString<kSize1,CharT,Traits>& rhs) noexcept { return lhs.compare(rhs)==0; }
+
+template<std::size_t kSize1, std::size_t kSize2, typename CharT, typename Traits>
+constexpr bool operator<(const ClipString<kSize1,CharT,Traits>& lhs, const ClipString<kSize1,CharT,Traits>& rhs) noexcept { return lhs.compare(rhs)<0; }
+
+template<std::size_t kSize1, std::size_t kSize2, typename CharT, typename Traits>
+constexpr bool operator<=(const ClipString<kSize1,CharT,Traits>& lhs, const ClipString<kSize1,CharT,Traits>& rhs) noexcept { return lhs.compare(rhs)<=0; }
+
+template<std::size_t kSize1, std::size_t kSize2, typename CharT, typename Traits>
+constexpr bool operator>(const ClipString<kSize1,CharT,Traits>& lhs, const ClipString<kSize1,CharT,Traits>& rhs) noexcept { return lhs.compare(rhs)>0; }
+
+template<std::size_t kSize1, std::size_t kSize2, typename CharT, typename Traits>
+constexpr bool operator>=(const ClipString<kSize1,CharT,Traits>& lhs, const ClipString<kSize1,CharT,Traits>& rhs) noexcept { return lhs.compare(rhs)>=0; }
+
+// operator!=,operator==,operator<,operator<=,operator>,operator>=, ClipString <=> const CharT*
+template<std::size_t kSize1, typename CharT, typename Traits>
+constexpr bool operator!=(const ClipString<kSize1,CharT,Traits>& lhs, const CharT* rhs) noexcept { return lhs.compare(rhs)!=0; }
+
+template<std::size_t kSize1, typename CharT, typename Traits>
+constexpr bool operator!=(const CharT* lhs, const ClipString<kSize1,CharT,Traits>& rhs) noexcept { return rhs.compare(lhs)!=0; }
+
+template<std::size_t kSize1, typename CharT, typename Traits>
+constexpr bool operator==(const ClipString<kSize1,CharT,Traits>& lhs, const CharT* rhs) noexcept { return lhs.compare(rhs)==0; }
+
+template<std::size_t kSize1, typename CharT, typename Traits>
+constexpr bool operator==(const CharT* lhs, const ClipString<kSize1,CharT,Traits>& rhs) noexcept { return rhs.compare(lhs)==0; }
+
+template<std::size_t kSize1, typename CharT, typename Traits>
+constexpr bool operator<(const ClipString<kSize1,CharT,Traits>& lhs, const CharT* rhs) noexcept { return lhs.compare(rhs)<0; }
+
+template<std::size_t kSize1, typename CharT, typename Traits>
+constexpr bool operator<(const CharT* lhs, const ClipString<kSize1,CharT,Traits>& rhs) noexcept { return rhs.compare(lhs)>=0; }
+
+template<std::size_t kSize1, typename CharT, typename Traits>
+constexpr bool operator<=(const ClipString<kSize1,CharT,Traits>& lhs, const CharT* rhs) noexcept { return lhs.compare(rhs)<=0; }
+
+template<std::size_t kSize1, typename CharT, typename Traits>
+constexpr bool operator<=(const CharT* lhs, const ClipString<kSize1,CharT,Traits>& rhs) noexcept { return rhs.compare(lhs)>0; }
+
+template<std::size_t kSize1, typename CharT, typename Traits>
+constexpr bool operator>(const ClipString<kSize1,CharT,Traits>& lhs, const CharT* rhs) noexcept { return lhs.compare(rhs)>0; }
+
+template<std::size_t kSize1, typename CharT, typename Traits>
+constexpr bool operator>(const CharT* lhs, const ClipString<kSize1,CharT,Traits>& rhs) noexcept { return rhs.compare(lhs)<=0; }
+
+template<std::size_t kSize1, typename CharT, typename Traits>
+constexpr bool operator>=(const ClipString<kSize1,CharT,Traits>& lhs, const CharT* rhs) noexcept { return lhs.compare(rhs)>=0; }
+
+template<std::size_t kSize1, typename CharT, typename Traits>
+constexpr bool operator>=(const CharT* lhs, const ClipString<kSize1,CharT,Traits>& rhs) noexcept { return rhs.compare(lhs)<0; }
+
+
+// erase, erase_if ------------
+template<std::size_t kSize, class CharT, class Traits, class U = CharT>
+constexpr typename ClipString<kSize, CharT, Traits>::size_type erase(ClipString<kSize, CharT, Traits>& c, const U& value ) noexcept
+{
+  auto it = std::remove(c.begin(), c.end(), value);
+  auto r = c.end() - it;
+  c.erase(it, c.end());
+  return r;
+}
+
+template<std::size_t kSize, class CharT, class Traits, class Pred>
+constexpr typename ClipString<kSize, CharT, Traits>::size_type erase_if( ClipString<kSize, CharT, Traits>& c, Pred pred ) noexcept
+{
+  auto it = std::remove_if(c.begin(), c.end(), pred);
+  auto r = c.end() - it;
+  c.erase(it, c.end());
+  return r;
+}
+
+// =====================
+// Input/Output
+// =====================
+
+// operator<< -------------
+template<std::size_t kSize, typename CharT, typename Traits>
+std::basic_ostream<CharT, Traits>& operator<<(std::basic_ostream<CharT, Traits>& os, const ClipString<kSize,CharT,Traits>& str )
+{
+  typedef typename std::basic_ostream<CharT, Traits>::sentry sentry_type; 
+  sentry_type s(os);
+  if(!s) return os;
+
+  const std::streamsize len = static_cast<std::streamsize>(str.length());
+  const std::streamsize width = os.width();
+  if(width <= len)
+  {
+    if(os.rdbuf()->sputn(str.c_str(), len)!=len)
+    {
+      os.setstate(std::ios_base::failbit);
+    }
+  }
+  else
+  {
+    if((os.flags() & std::ios_base::adjustfield) == std::ios_base::left)
+    {
+      if(os.rdbuf()->sputn(str.c_str(), len)!=len)
+      {
+        os.setstate(std::ios_base::failbit);
+      }
+      for (std::streamsize pad = width - len; pad != 0; --pad)
+      {
+          if (os.rdbuf()->sputc(os.fill()) == Traits::eof())
+          {
+              os.setstate(std::ios_base::failbit);
+              break;
+          }
+      }
+    }
+    else
+    {
+      for (std::streamsize pad = width - len; pad != 0; --pad)
+      {
+          if (os.rdbuf()->sputc(os.fill()) == Traits::eof())
+          {
+              os.setstate(std::ios_base::failbit);
+              break;
+          }
+      }     
+      if(os && os.rdbuf()->sputn(str.c_str(), len)!=len)
+      {
+        os.setstate(std::ios_base::failbit);
+      }
+    }
+  }
+  os.width(0);
+  return os;
+}
+
+// operator>> -------------
+template<std::size_t kSize, typename CharT, typename Traits>
+std::basic_istream<CharT>& operator>>(std::basic_istream<CharT>& in, ClipString<kSize,CharT,Traits>& str)
+{
+  // create sentry. check input stream is ok
+  typedef typename std::basic_istream<CharT, Traits>::sentry sentry_type; 
+  sentry_type ok(in);
+  if(!ok)
+  {
+    in.setstate(std::ios_base::failbit);
+    return in;
+  }
+
+  // empty out the string
+  str.clear();
+
+  const std::ctype<CharT>& ct = std::use_facet<std::ctype<CharT>>(in.getloc());
+
+  // read up to kSize characters
+  typename ClipString<kSize,CharT,Traits>::size_type i = 0;
+  typename std::basic_istream<CharT, Traits>::int_type c;
+  CharT ch;
+  CharT ws = in.widen(' ');
+  bool cleanly;
+  while(true)
+  {
+    c = in.peek(); 
+    ch = Traits::to_char_type(c);
+    // if next character is whitespace or EOF
+    if(Traits::eq_int_type(c,Traits::eof()) || ct.is(std::ctype_base::space, ch))
+    {
+      cleanly = (i != ( kSize + 1 ));
+      break;
+    }
+    in.get(); // consume the character
+    
+    // a little sketchy. we write kSize+1 characters into the buffer. 
+    // which isn't an error since there's N+1 room counting the null terminator. 
+    // but we have to keep incrementing i past kSize to see if we are truncating 
+    // the istream or not...
+    if(i<kSize+1) 
+    {
+      Traits::assign(str[i],ch); // write into ClipStrin
+      ++i;
+    }
+  }
+  if(cleanly)
+  {
+    str.set_slack(kSize-i); // set the slack 
+    Traits::assign(str[i],CharT{}); // set the null terminator
+  }
+  else
+  {
+    typedef typename ClipString<kSize,CharT,Traits>::Flags flags_type;
+    typedef typename ClipString<kSize,CharT,Traits>::UnsignedCharT uchar_type;
+    str.set_flags(flags_type::Clipped | uchar_type{1}); // sets clipped to true. slack to 1 
+    Traits::assign(str[kSize-1],CharT{}); // set the null terminator
+  }
+  // nothing written from istream 
+  if(i==0) in.setstate(std::ios_base::failbit);
+  in.width(0); // clear width
+  return in;
 }
 
 #endif // ClipString.hpp

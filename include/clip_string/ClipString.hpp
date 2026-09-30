@@ -26,8 +26,6 @@
 #ifndef CLIPSTRING_CLIPSTRING_H
 #define CLIPSTRING_CLIPSTRING_H
 
-using std::cout;
-
 template<std::size_t kSize, typename CharT = char, typename Traits = std::char_traits<CharT>>
 class ClipString
 {
@@ -67,6 +65,7 @@ class ClipString
     using reverse_iterator = std::reverse_iterator<iterator>;
     using const_reverse_iterator = std::reverse_iterator<const_iterator>;
     static constexpr size_type npos = -1; 
+    // TODO do I want this public? 
     struct Flags{
       static constexpr UnsignedCharT Clipped = UnsignedCharT{1}  << (CHAR_BIT*sizeof(CharT)-1);
       static constexpr UnsignedCharT NullptrPassed = UnsignedCharT{1}  << (CHAR_BIT*sizeof(CharT)-2);
@@ -76,9 +75,11 @@ class ClipString
       static constexpr UnsignedCharT ShortSlackMask = static_cast<UnsignedCharT>(~(FlagsMask | ExtraSlack));
     };
 
-    // ====================
-    // Constructors  
-    // ====================
+    // ======================
+    // Member functions
+    // ======================
+
+    // Constructors ------------------
     constexpr ClipString() noexcept
     {
       clear();
@@ -144,6 +145,36 @@ class ClipString
 
     // destructor ------------------------
     ~ClipString()=default;
+
+    // operator= -------------------------
+    template<std::size_t kSizeOther>
+    constexpr ClipString& operator=(const CopyableClipString<kSizeOther>& other) noexcept
+    {
+      return assign(other);
+    }
+
+    constexpr ClipString& operator=(const CharT* s) noexcept
+    {
+      return assign(s);
+    }
+
+    constexpr ClipString& operator=(CharT ch) noexcept
+    {
+      return assign(std::addressof(ch),1);
+    }
+
+    constexpr ClipString& operator=( std::initializer_list<CharT> ilist ) noexcept
+    {
+      return assign(ilist);
+    }
+
+    template<class StringViewLike, typename = std::enable_if_t<is_sv_convertible<StringViewLike>::value>>
+    ClipString& operator=( const StringViewLike& t )
+    {
+      return assign(t);
+    }
+
+    ClipString& operator=( std::nullptr_t ) = delete;
 
     // Assign ------------------------ 
     constexpr ClipString& assign(size_type count, CharT ch) noexcept
@@ -400,43 +431,17 @@ class ClipString
       return *this;
     }
 
-    // operator= -------------------------
-    template<std::size_t kSizeOther>
-    constexpr ClipString& operator=(const CopyableClipString<kSizeOther>& other) noexcept
-    {
-      return assign(other);
-    }
-
-    constexpr ClipString& operator=(const CharT* s) noexcept
-    {
-      return assign(s);
-    }
-
-    constexpr ClipString& operator=(CharT ch) noexcept
-    {
-      return assign(std::addressof(ch),1);
-    }
-
-    constexpr ClipString& operator=( std::initializer_list<CharT> ilist ) noexcept
-    {
-      return assign(ilist);
-    }
-
-    template<class StringViewLike, typename = std::enable_if_t<is_sv_convertible<StringViewLike>::value>>
-    ClipString& operator=( const StringViewLike& t )
-    {
-      return assign(t);
-    }
-
-    ClipString& operator=( std::nullptr_t ) = delete;
-
     // get_allocate (deleted) ---------------------
     void get_allocator() const = delete;
 
     // ===========================
-    // Member Functions
+    // Flags Member Functions
     // ===========================
+
+    // clipped ----------------
     bool clipped() const noexcept { return ((flags() & Flags::Clipped)!=0); }
+    
+    // null_passed ----------------
     bool null_passed() const noexcept { return ((flags() & Flags::NullptrPassed)!=0); }
 
     // ===========================
@@ -768,16 +773,6 @@ class ClipString
       return *this;
     }
 
-    // copy -----------------
-    constexpr size_type copy( CharT* dest, size_type count, size_type pos = 0 ) const
-    {
-      size_type sz = size(); 
-      if(pos > sz) throw std::out_of_range{c_str()};
-      count = std::min(sz - pos, count);
-      traits_type::copy(dest, data() + pos, count);
-      return count;
-    }
-
     // push_back --------------
     void push_back(CharT ch) noexcept
     {
@@ -1077,6 +1072,16 @@ class ClipString
       return replace(pos,count,sv.c_str() + pos2, actual_count);
     }
 
+    // copy -----------------
+    constexpr size_type copy( CharT* dest, size_type count, size_type pos = 0 ) const
+    {
+      size_type sz = size(); 
+      if(pos > sz) throw std::out_of_range{c_str()};
+      count = std::min(sz - pos, count);
+      traits_type::copy(dest, data() + pos, count);
+      return count;
+    }
+
     // resize --------------
     constexpr void resize( size_type count, CharT ch = CharT{} )
     {
@@ -1305,6 +1310,12 @@ class ClipString
       return compare_impl(c_str()+pos1, clamped, sv.c_str()+pos2, clamped2);
     }
 
+    // substr ---------------------- 
+    constexpr ClipString substr(size_type pos, size_type count) const noexcept
+    {
+      return ClipString(*this, pos,count);
+    }
+
   public: // TODO make protected
     // Implementations ------------------
     static constexpr int compare_impl(const CharT* data1, size_type len, const CharT* data2, const size_type rlen) noexcept
@@ -1384,5 +1395,49 @@ class ClipString
     // and therefore serves as the null terminator for a kSize-character string.
     // When flags are set, the maximum null-terminated string length is kSize-1.
 };
+
+// =======================
+// Non-member functions
+// =======================
+
+template<std::size_t kSize1, std::size_t kSize2, typename CharT, typename Traits>
+constexpr ClipString<std::max(kSize1,kSize2), CharT, Traits> operator+(const ClipString<kSize1,CharT,Traits>& lhs, const ClipString<kSize2,CharT,Traits>& rhs) noexcept
+{
+  ClipString<std::max(kSize1,kSize2),CharT,Traits> result(lhs);
+  result.append(rhs);
+  return result;
+}
+
+template<std::size_t kSize1, typename CharT, typename Traits>
+constexpr ClipString<kSize1, CharT, Traits> operator+(const ClipString<kSize1,CharT,Traits>& lhs, const CharT* s) noexcept
+{
+  ClipString<kSize1,CharT,Traits> result(lhs);
+  result.append(s);
+  return result;
+}
+
+template<std::size_t kSize1, class CharT, class Traits>
+ClipString<kSize1, CharT, Traits> operator+(const ClipString<kSize1, CharT, Traits>& lhs, CharT ch) noexcept
+{
+  ClipString<kSize1,CharT,Traits> result(lhs);
+  result.append(ch);
+  return result;
+}
+
+template<std::size_t kSize1, typename CharT, typename Traits>
+constexpr ClipString<kSize1, CharT, Traits> operator+(const CharT* s, const ClipString<kSize1,CharT,Traits>& rhs) noexcept
+{
+  ClipString<kSize1,CharT,Traits> result(s);
+  result.append(rhs);
+  return result;
+}
+
+template<std::size_t kSize1, class CharT, class Traits>
+ClipString<kSize1, CharT, Traits> operator+(CharT ch, const ClipString<kSize1, CharT, Traits>& rhs) noexcept
+{
+  ClipString<kSize1,CharT,Traits> result(1, ch);
+  result.append(rhs);
+  return result;
+}
 
 #endif // ClipString.hpp

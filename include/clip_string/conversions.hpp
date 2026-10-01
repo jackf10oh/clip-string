@@ -8,7 +8,8 @@
 #define CLIPSTRING_CONVERSIONS_H 
 
 #include "ClipString.hpp"
-
+#include<limits>
+#include<cwchar>
 // ========================
 // Numeric conversions
 // ========================
@@ -151,12 +152,12 @@ unsigned long long stoull(const ClipString<kSize,wchar_t,Traits>& s, std::size_t
 
 // stof, stod, stold ----------------
 template<std::size_t kSize, typename Traits>
-float stof(const ClipString<kSize,char,Traits>& s, std::size_t* pos = nullptr, int base = 10)
+float stof(const ClipString<kSize,char,Traits>& s, std::size_t* pos = nullptr)
 {
   const char* str = s.c_str();
   errno = 0;
   char* ptr{};
-  float result = std::strtof(str, &ptr, base); 
+  float result = std::strtof(str, &ptr); 
   if(str==ptr) throw std::invalid_argument{};
   if(errno==ERANGE) throw std::out_of_range{str};
   if(pos!=nullptr) *pos = (ptr - str);
@@ -164,12 +165,12 @@ float stof(const ClipString<kSize,char,Traits>& s, std::size_t* pos = nullptr, i
 }
 
 template<std::size_t kSize, typename Traits>
-double stod(const ClipString<kSize,char,Traits>& s, std::size_t* pos = nullptr, int base = 10)
+double stod(const ClipString<kSize,char,Traits>& s, std::size_t* pos = nullptr)
 {
   const char* str = s.c_str();
   errno = 0;
   char* ptr{};
-  double result = std::strtod(str, &ptr, base); 
+  double result = std::strtod(str, &ptr); 
   if(str==ptr) throw std::invalid_argument{};
   if(errno==ERANGE) throw std::out_of_range{str};
   if(pos!=nullptr) *pos = (ptr - str);
@@ -177,12 +178,12 @@ double stod(const ClipString<kSize,char,Traits>& s, std::size_t* pos = nullptr, 
 }
 
 template<std::size_t kSize, typename Traits>
-long double stold(const ClipString<kSize,char,Traits>& s, std::size_t* pos = nullptr, int base = 10)
+long double stold(const ClipString<kSize,char,Traits>& s, std::size_t* pos = nullptr)
 {
   const char* str = s.c_str();
   errno = 0;
   char* ptr{};
-  long double result = std::strtold(str, &ptr, base); 
+  long double result = std::strtold(str, &ptr); 
   if(str==ptr) throw std::invalid_argument{};
   if(errno==ERANGE) throw std::out_of_range{str};
   if(pos!=nullptr) *pos = (ptr - str);
@@ -191,12 +192,12 @@ long double stold(const ClipString<kSize,char,Traits>& s, std::size_t* pos = nul
 
 // stof, stod, stold (wchar_t) ----------------
 template<std::size_t kSize, typename Traits>
-float stof(const ClipString<kSize,wchar_t,Traits>& s, std::size_t* pos = nullptr, int base = 10)
+float stof(const ClipString<kSize,wchar_t,Traits>& s, std::size_t* pos = nullptr)
 {
   const wchar_t* str = s.c_str();
   errno = 0;
   wchar_t* ptr{};
-  float result = std::strtof(str, &ptr, base); 
+  float result = std::wcstof(str, &ptr); 
   if(str==ptr) throw std::invalid_argument{};
   if(errno==ERANGE) throw std::out_of_range{str};
   if(pos!=nullptr) *pos = (ptr - str);
@@ -204,12 +205,12 @@ float stof(const ClipString<kSize,wchar_t,Traits>& s, std::size_t* pos = nullptr
 }
 
 template<std::size_t kSize, typename Traits>
-double stod(const ClipString<kSize,wchar_t,Traits>& s, std::size_t* pos = nullptr, int base = 10)
+double stod(const ClipString<kSize,wchar_t,Traits>& s, std::size_t* pos = nullptr)
 {
   const wchar_t* str = s.c_str();
   errno = 0;
   wchar_t* ptr{};
-  double result = std::strtod(str, &ptr, base); 
+  double result = std::wcstod(str, &ptr); 
   if(str==ptr) throw std::invalid_argument{};
   if(errno==ERANGE) throw std::out_of_range{str};
   if(pos!=nullptr) *pos = (ptr - str);
@@ -217,12 +218,12 @@ double stod(const ClipString<kSize,wchar_t,Traits>& s, std::size_t* pos = nullpt
 }
 
 template<std::size_t kSize, typename Traits>
-long double stold(const ClipString<kSize,wchar_t,Traits>& s, std::size_t* pos = nullptr, int base = 10)
+long double stold(const ClipString<kSize,wchar_t,Traits>& s, std::size_t* pos = nullptr)
 {
   const wchar_t* str = s.c_str();
   errno = 0;
   wchar_t* ptr{};
-  long double result = std::strtold(str, &ptr, base); 
+  long double result = std::wcstold(str, &ptr); 
   if(str==ptr) throw std::invalid_argument{};
   if(errno==ERANGE) throw std::out_of_range{str};
   if(pos!=nullptr) *pos = (ptr - str);

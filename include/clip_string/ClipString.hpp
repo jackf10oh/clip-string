@@ -13,7 +13,9 @@
 //
 // JAF 9/25/2026
 
+#include<cerrno>
 #include<cstdint>
+#include<cstdlib>
 #include<cstring>
 #include<cassert>
 #include<array>
@@ -1720,5 +1722,7 @@ std::basic_istream<CharT,Traits>& getline(std::basic_istream<CharT,Traits>& in, 
   in.width(0); // clear width
   return in;
 }
+
+#include "conversions.hpp"
 
 #endif // ClipString.hpp

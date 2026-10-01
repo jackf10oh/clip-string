@@ -14,6 +14,8 @@
 // Numeric conversions
 // ========================
 
+// TODO all of these can be noexcept. only exception thrown by std::basic_string is bad allocation!
+
 // stoi, stol, stoll ----------------
 template<std::size_t kSize, typename Traits>
 int stoi(const ClipString<kSize,char,Traits>& s, std::size_t* pos = nullptr, int base = 10)

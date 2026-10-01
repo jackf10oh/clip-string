@@ -51,19 +51,21 @@ class ClipString
     static_assert(alignof(UnsignedCharT) == alignof(CharT));
 
   public:
+    // Nested Types =============
     using traits_type = Traits;
     using value_type = CharT;
     using allocator_type = void;
-    using reference = CharT&; 
-    using const_reference = const CharT&;
     using size_type = std::size_t; 
     using difference_type = std::ptrdiff_t;
+    using reference = CharT&; 
+    using const_reference = const CharT&;
     using pointer = CharT*;
     using const_pointer = const CharT*;
     using iterator = CharT*;
     using const_iterator = const CharT*;
     using reverse_iterator = std::reverse_iterator<iterator>;
     using const_reverse_iterator = std::reverse_iterator<const_iterator>;
+    // Data Members -------------
     static constexpr size_type npos = -1; 
     // TODO do I want this public? 
     struct Flags{
@@ -80,6 +82,7 @@ class ClipString
     // ======================
 
     // Constructors ------------------
+    // TODO fix aliasing
     constexpr ClipString() noexcept
     {
       clear();
@@ -177,6 +180,30 @@ class ClipString
     ClipString& operator=( std::nullptr_t ) = delete;
 
     // Assign ------------------------ 
+    template<std::size_t kSizeOther>
+    constexpr ClipString& assign(const CopyableClipString<kSizeOther>& s) noexcept
+    {
+      size_type count = s.length();
+      if(count <= kSize)
+      {
+        traits_type::copy(data(), s.c_str(), count);
+        traits_type::assign(data()[count], CharT{}); // null terminate
+        set_flags(static_cast<UnsignedCharT>(~Flags::FlagsMask)); // flags are all false
+        set_slack(kSize-count);
+      }
+      else
+      {
+        // need to set flags + clip
+        traits_type::copy(data(), s.c_str(), kSize-1);
+        traits_type::assign(data()[kSize-1], CharT{}); // null terminate
+        set_flags(Flags::Clipped);
+        set_slack(1);
+      }
+      UnsignedCharT f = flags() | (s.flags() & Flags::FlagsMask);
+      set_flags(f);
+      return *this;
+    }
+    
     constexpr ClipString& assign(size_type count, CharT ch) noexcept
     {
       if(count <= kSize)
@@ -193,40 +220,6 @@ class ClipString
         traits_type::assign(data()[kSize-1], CharT{});
         set_flags(Flags::Clipped);
         set_slack(1);
-      }
-      return *this;
-    }
-
-    template< class InputIt >
-    constexpr ClipString&  assign(InputIt first, InputIt last) noexcept
-    {
-      // copy up to kSize entries out of [first, last)
-      size_type count = 0;
-      while((first!=last) && (count!=kSize))
-      {
-        traits_type::assign(data()[count], *first);
-        ++count;
-        ++first;
-      }
-      // if we wrote exactly kSize entries and haven't reach the end of [first,last) -> clipped the range
-      if((count==kSize) && (first!=last))
-      {
-        if(first!=last)
-        {
-          set_flags(Flags::Clipped);
-          set_slack(1);
-          traits_type::assign(data()[kSize-1],CharT{});
-        }
-        else
-        {
-          set_flags(0x00); // set all flags to false, sets ExtraSlack bit to false, also sets slack to 0
-        }
-      }
-      else
-      {
-        set_flags(0x00);
-        set_slack(kSize-count);
-        traits_type::assign(data()[count],CharT{});
       }
       return *this;
     }
@@ -332,30 +325,6 @@ class ClipString
     }
 
     template<std::size_t kSizeOther>
-    constexpr ClipString& assign(const CopyableClipString<kSizeOther>& s) noexcept
-    {
-      size_type count = s.length();
-      if(count <= kSize)
-      {
-        traits_type::copy(data(), s.c_str(), count);
-        traits_type::assign(data()[count], CharT{}); // null terminate
-        set_flags(static_cast<UnsignedCharT>(~Flags::FlagsMask)); // flags are all false
-        set_slack(kSize-count);
-      }
-      else
-      {
-        // need to set flags + clip
-        traits_type::copy(data(), s.c_str(), kSize-1);
-        traits_type::assign(data()[kSize-1], CharT{}); // null terminate
-        set_flags(Flags::Clipped);
-        set_slack(1);
-      }
-      UnsignedCharT f = flags() | (s.flags() & Flags::FlagsMask);
-      set_flags(f);
-      return *this;
-    }
-
-    template<std::size_t kSizeOther>
     constexpr ClipString& assign(const CopyableClipString<kSizeOther>& s, size_type pos)
     {
       if(pos > s.length()) throw std::out_of_range{};
@@ -402,6 +371,40 @@ class ClipString
       }
       UnsignedCharT f = flags() | (s.flags() & Flags::FlagsMask);
       set_flags(f);
+      return *this;
+    }
+
+    template< class InputIt >
+    constexpr ClipString&  assign(InputIt first, InputIt last) noexcept
+    {
+      // copy up to kSize entries out of [first, last)
+      size_type count = 0;
+      while((first!=last) && (count!=kSize))
+      {
+        traits_type::assign(data()[count], *first);
+        ++count;
+        ++first;
+      }
+      // if we wrote exactly kSize entries and haven't reach the end of [first,last) -> clipped the range
+      if((count==kSize) && (first!=last))
+      {
+        if(first!=last)
+        {
+          set_flags(Flags::Clipped);
+          set_slack(1);
+          traits_type::assign(data()[kSize-1],CharT{});
+        }
+        else
+        {
+          set_flags(0x00); // set all flags to false, sets ExtraSlack bit to false, also sets slack to 0
+        }
+      }
+      else
+      {
+        set_flags(0x00);
+        set_slack(kSize-count);
+        traits_type::assign(data()[count],CharT{});
+      }
       return *this;
     }
 
@@ -1496,7 +1499,6 @@ constexpr bool operator>=(const ClipString<kSize1,CharT,Traits>& lhs, const Char
 template<std::size_t kSize1, typename CharT, typename Traits>
 constexpr bool operator>=(const CharT* lhs, const ClipString<kSize1,CharT,Traits>& rhs) noexcept { return rhs.compare(lhs)<0; }
 
-
 // erase, erase_if ------------
 template<std::size_t kSize, class CharT, class Traits, class U = CharT>
 constexpr typename ClipString<kSize, CharT, Traits>::size_type erase(ClipString<kSize, CharT, Traits>& c, const U& value ) noexcept
@@ -1576,7 +1578,7 @@ std::basic_ostream<CharT, Traits>& operator<<(std::basic_ostream<CharT, Traits>&
 
 // operator>> -------------
 template<std::size_t kSize, typename CharT, typename Traits>
-std::basic_istream<CharT>& operator>>(std::basic_istream<CharT>& in, ClipString<kSize,CharT,Traits>& str)
+std::basic_istream<CharT,Traits>& operator>>(std::basic_istream<CharT,Traits>& in, ClipString<kSize,CharT,Traits>& str)
 {
   // create sentry. check input stream is ok
   typedef typename std::basic_istream<CharT, Traits>::sentry sentry_type; 
@@ -1608,6 +1610,87 @@ std::basic_istream<CharT>& operator>>(std::basic_istream<CharT>& in, ClipString<
       cleanly = (i != ( kSize + 1 ));
       break;
     }
+    in.get(); // consume the character
+    
+    // a little sketchy. we write kSize+1 characters into the buffer. 
+    // which isn't an error since there's N+1 room counting the null terminator. 
+    // but we have to keep incrementing i past kSize to see if we are truncating 
+    // the istream or not...
+    if(i<kSize+1) 
+    {
+      Traits::assign(str[i],ch); // write into ClipStrin
+      ++i;
+    }
+  }
+  if(cleanly)
+  {
+    str.set_slack(kSize-i); // set the slack 
+    Traits::assign(str[i],CharT{}); // set the null terminator
+  }
+  else
+  {
+    typedef typename ClipString<kSize,CharT,Traits>::Flags flags_type;
+    typedef typename ClipString<kSize,CharT,Traits>::UnsignedCharT uchar_type;
+    str.set_flags(flags_type::Clipped | uchar_type{1}); // sets clipped to true. slack to 1 
+    Traits::assign(str[kSize-1],CharT{}); // set the null terminator
+  }
+  // nothing written from istream 
+  if(i==0) in.setstate(std::ios_base::failbit);
+  in.width(0); // clear width
+  return in;
+}
+
+// getline ----------------
+template<std::size_t kSize, typename CharT, typename Traits>
+std::basic_istream<CharT,Traits>& getline(std::basic_istream<CharT,Traits>& in, ClipString<kSize,CharT,Traits>& str)
+{
+  return getline(in,str,in.widen('\n'));
+}
+
+template<std::size_t kSize, typename CharT, typename Traits>
+std::basic_istream<CharT,Traits>& getline(std::basic_istream<CharT,Traits>& in, ClipString<kSize,CharT,Traits>& str, CharT delim)
+{
+  // create sentry. check input stream is ok
+  typedef typename std::basic_istream<CharT, Traits>::sentry sentry_type; 
+  sentry_type ok(in);
+  if(!ok)
+  {
+    in.setstate(std::ios_base::failbit);
+    return in;
+  }
+
+  // empty out the string
+  str.clear();
+
+  const std::ctype<CharT>& ct = std::use_facet<std::ctype<CharT>>(in.getloc());
+
+  // read up to kSize characters
+  typename ClipString<kSize,CharT,Traits>::size_type i = 0;
+  typename std::basic_istream<CharT, Traits>::int_type c;
+  CharT ch;
+  CharT ws = in.widen(' ');
+  bool cleanly;
+  while(true)
+  {
+    c = in.peek(); 
+    ch = Traits::to_char_type(c);
+
+    // if next character is EOF
+    if(Traits::eq_int_type(c,Traits::eof()))
+    {
+      in.setstate(std::ios_base::eofbit);
+      cleanly = (i != ( kSize + 1 ));
+      break;
+    }
+
+    // if next character is delimiter
+    if(Traits::eq(c,delim))
+    {
+      in.get(); // consume the character. without putting into str
+      cleanly = (i != ( kSize + 1 ));
+      break;
+    }
+
     in.get(); // consume the character
     
     // a little sketchy. we write kSize+1 characters into the buffer. 
